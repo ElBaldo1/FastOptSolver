@@ -1,5 +1,5 @@
 import numpy as np
-from prox_l1 import prox_l1
+from .prox_l1 import prox_l1
 
 def prox_elasticnet(v, lam1, lam2):
     """

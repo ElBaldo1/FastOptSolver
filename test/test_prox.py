@@ -1,7 +1,9 @@
 import numpy as np
-from prox_l1 import prox_l1
-from prox_l2 import prox_l2
-from prox_elasticnet import prox_elasticnet
+
+from prox.prox_l1 import prox_l1
+from prox.prox_l2 import prox_l2
+from prox.prox_elasticnet import prox_elasticnet
+
 
 def run_prox_tests():
     v = np.array([3.0, -1.5, 0.3, 0.0])
