@@ -1,45 +1,38 @@
-# solvers/lbfgs.py
+"""
+Gradient Descent Solver Module
 
+Implements plain gradient descent for minimizing smooth functions such as the least-squares loss.
+"""
 import numpy as np
-from scipy.optimize import minimize
 
-def lbfgs_solver(A, b, lam, model="ridge"):
+def gradient_descent(grad_f, x0, step_size, max_iter=1000, tol=1e-6, verbose=False, loss_f=None):
     """
-    Solves a smooth regularized least squares problem using L-BFGS.
-    
-    Assumptions:
-    - Only supports smooth regularizers (ℓ2) — no ℓ1 or nonsmooth terms.
-    - For 'ridge', this solves the correct objective:
-        0.5 * ||Ax - b||^2 + λ * ||x||^2
-    - For 'elasticnet', we ignore the ℓ1 part (α * ||x||_1),
-      and optimize only the ℓ2 term. This is an approximation and should be clearly
-      stated in the technical report.
-    - Not suitable for LASSO (ℓ1 only) — do not use L-BFGS in that case.
+    Performs gradient descent.
+
+    Parameters:
+        grad_f (function): Gradient of the loss function.
+        x0 (np.ndarray): Starting point.
+        step_size (float): Learning rate.
+        max_iter (int): Maximum iterations.
+        tol (float): Tolerance for convergence.
+        verbose (bool): If True, prints progress logs.
+        loss_f (function, optional): Function to compute objective value.
+
+    Returns:
+        dict: Contains final solution 'x' and a 'history' list with objective values per iteration.
     """
-
-    m, n = A.shape
-
-    def loss(x):
-        res = A @ x - b
-        if model == "ridge":
-            return 0.5 * np.dot(res, res) + lam * np.dot(x, x)
-        elif model == "elasticnet":
-            return 0.5 * np.dot(res, res) + lam * 0.5 * np.dot(x, x)  # ℓ1 ignored
+    x = x0.copy()
+    history = []
+    for k in range(max_iter):
+        grad = grad_f(x)
+        x_next = x - step_size * grad
+        if np.linalg.norm(x_next - x) < tol:
+            break
+        x = x_next
+        if loss_f:
+            history.append(loss_f(x))
         else:
-            raise ValueError("L-BFGS only supports 'ridge' or approximate 'elasticnet'")
-
-    def grad(x):
-        res = A @ x - b
-        if model == "ridge":
-            return A.T @ res + 2 * lam * x
-        elif model == "elasticnet":
-            return A.T @ res + lam * x
-
-    x0 = np.zeros(n)
-    result = minimize(loss, x0, method="L-BFGS-B", jac=grad, options={"maxiter": 1000})
-
-    return {
-        "x": result.x,
-        "history": [],  # No tracking of per-iteration values
-        "converged": result.success
-    }
+            history.append(None)
+        if verbose and k % 10 == 0:
+            logging.info(f"[GD] Iter {k:4d} - Step norm: {np.linalg.norm(x_next - x):.2e}")
+    return {"x": x, "history": history}

@@ -29,7 +29,8 @@ def gradient_descent(
             history.append(None)
 
         if verbose and k % 10 == 0:
-            print(f"[GD] Iter {k:4d} - Step norm: {np.linalg.norm(x_next - x):.2e}")
+            current_loss = loss_f(x) if loss_f is not None else np.nan
+            print(f"[GD] Iter {k:4d} - Loss: {current_loss:.4e}, Step norm: {np.linalg.norm(x_next - x):.2e}")
 
     return {
         "x": x,

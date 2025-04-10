@@ -1,14 +1,14 @@
-# prox/prox_l1.py
-
 import numpy as np
 
 def prox_l1(x: np.ndarray, t: float) -> np.ndarray:
     """
-    Proximal operator for ℓ1 norm: λ * ||x||_1
-    Implements soft-thresholding: shrinkage toward zero
+    Computes the ℓ1 proximal operator using soft-thresholding.
+    
+    Parameters:
+        x (np.ndarray): Input vector.
+        t (float): Threshold parameter (typically λ * step_size).
 
-    Assumptions:
-    - t = λ * step_size is passed in already
-    - Applies element-wise operation: soft(x_i, t) = sign(x_i) * max(|x_i| - t, 0)
+    Returns:
+        np.ndarray: The result after applying the soft-thresholding operator element-wise.
     """
     return np.sign(x) * np.maximum(np.abs(x) - t, 0)

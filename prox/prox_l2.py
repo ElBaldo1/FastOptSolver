@@ -1,14 +1,14 @@
-# prox/prox_l2.py
-
 import numpy as np
 
 def prox_l2(x: np.ndarray, t: float) -> np.ndarray:
     """
-    Proximal operator for λ * ||x||_2^2:
-    Closed-form solution is shrinkage toward zero.
+    Computes the proximal operator for the ℓ2 norm regularization (using shrinkage).
+    
+    Parameters:
+        x (np.ndarray): Input vector.
+        t (float): Threshold parameter (λ * step_size).
 
-    Assumptions:
-    - t = λ * step_size
-    - Since ∇(λ * ||x||^2) = 2λx, the shrinkage factor becomes 1 / (1 + 2t)
+    Returns:
+        np.ndarray: The result after applying the shrinkage operator.
     """
     return x / (1 + 2 * t)
