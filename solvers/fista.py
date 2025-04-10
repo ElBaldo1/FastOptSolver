@@ -1,57 +1,36 @@
 import numpy as np
-from prox.prox_l1 import prox_l1
+from solvers.gradient import grad_f
+from prox.prox_l1 import prox_l1, lasso_objective
 
 def fista(A, b, lam, step_size, max_iter=1000, tol=1e-6, verbose=False):
-    r"""
-    FISTA — Fast Iterative Shrinkage-Thresholding Algorithm.
-
-    Solves the composite convex optimization problem:
-    \[
-        \min_{x \in \mathbb{R}^n}
-        \left\{
-            \tfrac{1}{2} \|Ax - b\|_2^2 + \lambda \|x\|_1
-        \right\}
-    \]
-    where:
-    - The smooth term :math:`f(x) = \tfrac{1}{2}\|Ax - b\|^2` has Lipschitz gradient,
-    - The non-smooth term :math:`g(x) = \lambda \|x\|_1` is proximable.
+    """
+    FISTA (Fast Iterative Shrinkage-Thresholding Algorithm) for LASSO:
+        min_x 0.5 * ||Ax - b||^2 + lam * ||x||_1
 
     Parameters
     ----------
-    A : np.ndarray of shape (m, n)
+    A : np.ndarray (m, n)
         Design matrix.
-    b : np.ndarray of shape (m,)
-        Observation vector.
+    b : np.ndarray (m,)
+        Target vector.
     lam : float
-        Regularization parameter :math:`\lambda \ge 0` (controls sparsity).
+        Regularization strength.
     step_size : float
-        Gradient step size, must satisfy :math:`\text{step\_size} \le 1 / L`,
-        where :math:`L = \|A^\top A\|_2` is the Lipschitz constant of ∇f.
+        Step size (must satisfy step_size <= 1 / ||AᵗA||).
     max_iter : int
         Maximum number of iterations.
     tol : float
-        Tolerance on the norm of the update (used as stopping criterion).
+        Tolerance on update norm.
     verbose : bool
-        If True, prints convergence information at each iteration.
+        If True, print iteration log.
 
     Returns
     -------
-    x : np.ndarray of shape (n,)
-        Final estimate of the minimizer.
+    x : np.ndarray (n,)
+        Final estimated solution.
     history : dict
-        Dictionary with keys:
-        - 'objective': list of objective values over iterations.
-        - 'residual': list of residual norms :math:`\|x^{(k)} - x^{(k-1)}\|`.
-
-    Notes
-    -----
-    - FISTA improves over ISTA by incorporating a momentum term (Nesterov acceleration).
-    - The algorithm has theoretical convergence rate :math:`O(1/k^2)` for the objective value.
-
-    Real-world usage (2 lines)
-    --------------------------
-    FISTA is commonly used in signal processing and compressed sensing to recover sparse signals.
-    It combines fast convergence with low per-iteration cost, especially when prox operators are simple.
+        - 'objective': list of objective values.
+        - 'residual': list of residuals ||x_k+1 - x_k||.
     """
     m, n = A.shape
     x = np.zeros(n)
@@ -60,26 +39,26 @@ def fista(A, b, lam, step_size, max_iter=1000, tol=1e-6, verbose=False):
     history = {'objective': [], 'residual': []}
 
     for k in range(max_iter):
-        # Gradient of the smooth part: ∇f(y) = Aᵀ(Ay - b)
-        grad = A.T @ (A @ y - b)
+        # Gradient step on y
+        grad = grad_f(A, b, y)
 
-        # Proximal update: solve prox_{λ * step * ||·||₁}(y - step * grad)
+        # Prox step (soft-thresholding)
         x_new = prox_l1(y - step_size * grad, lam * step_size)
 
-        # Compute objective value and residual
-        obj = 0.5 * np.linalg.norm(A @ x_new - b)**2 + lam * np.linalg.norm(x_new, 1)
+        # Track objective and residual
+        obj = lasso_objective(A, b, x_new, lam)
         res = np.linalg.norm(x_new - x)
 
         history['objective'].append(obj)
         history['residual'].append(res)
 
         if verbose:
-            print(f"Iter {k:4d}: Obj = {obj:.6f}, Residual = {res:.2e}")
+            print(f"[FISTA] Iter {k:4d} | Obj: {obj:.6f} | Residual: {res:.2e}")
 
         if res < tol:
             break
 
-        # Nesterov acceleration
+        # Acceleration
         t_new = 0.5 * (1 + np.sqrt(1 + 4 * t**2))
         y = x_new + ((t - 1) / t_new) * (x_new - x)
 

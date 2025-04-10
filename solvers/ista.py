@@ -1,77 +1,55 @@
 import numpy as np
-from prox.prox_l1 import prox_l1
+from solvers.gradient import grad_f
+from prox.prox_l1 import prox_l1, lasso_objective
 
 def ista(A, b, lam, step_size, max_iter=1000, tol=1e-6, verbose=False):
-    r"""
-    ISTA — Iterative Shrinkage-Thresholding Algorithm.
+    """
+    ISTA (Iterative Shrinkage-Thresholding Algorithm) for solving:
+        min_x 0.5 * ||Ax - b||^2 + lam * ||x||_1
 
-    Solves the convex optimization problem:
-    \[
-        \min_{x \in \mathbb{R}^n}
-        \left\{
-            f(x) + g(x) := \frac{1}{2}\|Ax - b\|_2^2 + \lambda \|x\|_1
-        \right\}
-    \]
-    where:
-    - :math:`f(x) = \frac{1}{2}\|Ax - b\|^2` is smooth with Lipschitz continuous gradient,
-    - :math:`g(x) = \lambda \|x\|_1` is nonsmooth but proximable.
+    This implementation is specialized for the LASSO problem.
 
     Parameters
     ----------
-    A : np.ndarray, shape (m, n)
-        Design (measurement) matrix.
-    b : np.ndarray, shape (m,)
-        Observation vector.
+    A : np.ndarray (m, n)
+        Data matrix
+    b : np.ndarray (m,)
+        Observation vector
     lam : float
-        Regularization parameter :math:`\lambda \ge 0`.
+        Regularization parameter (lambda ≥ 0)
     step_size : float
-        Gradient descent step size, must satisfy :math:`\text{step\_size} \le 1 / \|A^T A\|_2` for convergence.
+        Step size for gradient descent (typically 1 / ||AᵀA||)
     max_iter : int
-        Maximum number of iterations to perform.
+        Maximum number of iterations
     tol : float
-        Convergence threshold based on :math:`\|x^{(k)} - x^{(k-1)}\|_2`.
+        Tolerance for stopping criterion
     verbose : bool
-        If True, prints iteration-wise objective value and residual norm.
+        If True, print progress per iteration
 
     Returns
     -------
-    x : np.ndarray, shape (n,)
-        Estimated minimizer :math:`x^\star`.
+    x : np.ndarray (n,)
+        Final estimated solution
     history : dict
-        Tracks:
-        - 'objective': list of objective values :math:`F(x^{(k)})` at each iteration,
-        - 'residual' : list of update residuals :math:`\|x^{(k)} - x^{(k-1)}\|`.
-
-    Notes
-    -----
-    - ISTA is a proximal gradient method with convergence rate :math:`O(1/k)` in function values.
-    - It is commonly used for sparse recovery problems such as Lasso and basis pursuit.
-
-    Real-world usage (2 lines)
-    --------------------------
-    ISTA is used in compressed sensing and image deblurring when solutions are sparse in a known basis.
-    Its simplicity makes it a natural baseline before using accelerated versions like FISTA.
+        - 'objective': list of F(x) per iteration
+        - 'residual': list of ||x_k+1 - x_k|| per iteration
     """
     m, n = A.shape
     x = np.zeros(n)
     history = {'objective': [], 'residual': []}
 
     for k in range(max_iter):
-        # Compute gradient ∇f(x) = Aᵀ(Ax - b)
-        grad = A.T @ (A @ x - b)
-
-        # Proximal gradient step for g(x) = λ‖x‖₁
+        grad = grad_f(A, b, x)
         x_new = prox_l1(x - step_size * grad, lam * step_size)
 
-        # Compute function value and update distance
-        obj = 0.5 * np.linalg.norm(A @ x_new - b)**2 + lam * np.linalg.norm(x_new, 1)
+        obj = lasso_objective(A, b, x_new, lam)
         res = np.linalg.norm(x_new - x)
 
         history['objective'].append(obj)
         history['residual'].append(res)
 
         if verbose:
-            print(f"Iter {k:4d}: Obj = {obj:.6f}, Residual = {res:.2e}")
+            print(f"[ISTA] Iter {k:4d} | Obj: {obj:.6f} | Residual: {res:.2e}")
 
         if res < tol:
             break
