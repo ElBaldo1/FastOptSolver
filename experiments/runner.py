@@ -1,47 +1,72 @@
-import numpy as np
+"""
+experiments.runner
+==================
+
+Utility to benchmark a solver class for a fixed number of iterations.
+"""
+
+from __future__ import annotations
+
 from typing import Callable, Dict, List
+
+import numpy as np
+
 from utils.timer import Timer
 from algorithms.base_solver import BaseSolver
 from losses.base_loss import BaseLoss
+
 
 def run_experiment(
     solver_cls: Callable[..., BaseSolver],
     loss_obj: BaseLoss,
     X: np.ndarray,
     y: np.ndarray,
-    n_iter: int
-) -> Dict[str, float]:
+    n_iter: int,
+) -> Dict[str, object]:
     """
-    Run optimization experiment with given solver and loss function.
-    
-    Args:
-        solver_cls: Solver class to use (e.g. ISTA, FISTA)
-        loss_obj: Loss function to optimize
-        X: Input feature matrix (n_samples, n_features)
-        y: Target values (n_samples, 1)
-        n_iter: Number of iterations to run
-        
-    Returns:
-        Dictionary containing:
-        - solver: Solver name
-        - final_obj: Final objective value
-        - elapsed: Total time in seconds
-        - iter: Number of iterations completed
-        - history: List of objective values at each iteration
+    Run an optimisation experiment for *n_iter* iterations.
+
+    Parameters
+    ----------
+    solver_cls : Callable[..., BaseSolver]
+        Solver class (e.g. ISTA, FISTA) – it will be instantiated as
+        ``solver_cls(loss_obj)``.
+    loss_obj : BaseLoss
+        Loss function providing ``loss(X, y, w)``.
+    X : np.ndarray, shape (n_samples, n_features)
+        Feature matrix.
+    y : np.ndarray, shape (n_samples,)
+        Target vector.
+    n_iter : int
+        Number of calls to ``solver.step`` to perform.
+
+    Returns
+    -------
+    dict
+        {
+            "solver": str,
+            "final_obj": float,
+            "elapsed": float,
+            "iter": int,
+            "history": List[float],
+        }
     """
     solver = solver_cls(loss_obj)
-    history = []
-    
+    history: List[float] = []
+
     with Timer() as timer:
-        for i in range(n_iter):
+        # Optional: log initial objective (w = 0) for nicer convergence curve
+        solver.step(X, y)  # first step initialises weights and updates once
+        history.append(loss_obj.loss(X, y, solver.w))
+
+        for _ in range(n_iter - 1):
             solver.step(X, y)
-            current_obj = loss_obj.loss(solver.w, X, y)
-            history.append(current_obj)
-            
+            history.append(loss_obj.loss(X, y, solver.w))
+
     return {
-        'solver': solver.__class__.__name__,
-        'final_obj': history[-1],
-        'elapsed': timer.elapsed,
-        'iter': n_iter,
-        'history': history
+        "solver": solver.__class__.__name__,
+        "final_obj": history[-1],
+        "elapsed": timer.elapsed,
+        "iter": n_iter,
+        "history": history,
     }
