@@ -1,0 +1,70 @@
+import numpy as np
+from typing import Dict, Union
+from .base_solver import BaseSolver
+from losses.base_loss import BaseLoss
+
+class FISTA(BaseSolver):
+    """Fast Iterative Shrinkage-Thresholding Algorithm (FISTA) solver.
+    
+    Implementation of the FISTA algorithm from:
+    Beck, A., & Teboulle, M. (2009). A fast iterative shrinkage-thresholding algorithm 
+    for linear inverse problems. SIAM Journal on Imaging Sciences, 2(1), 183-202.
+    
+    Parameters
+    ----------
+    loss_obj : BaseLoss
+        Loss function object implementing compute() and gradient() methods
+    step_size : float
+        Learning rate/step size for gradient update
+    max_iter : int
+        Maximum number of iterations
+    tol : float
+        Tolerance for convergence checking
+    """
+    
+    def __init__(self, loss_obj: BaseLoss, step_size: float = 0.01, 
+                 max_iter: int = 1000, tol: float = 1e-4):
+        super().__init__(loss_obj, step_size, max_iter, tol)
+        self.t = 1.0  # Momentum variable
+        self.y = None  # Extrapolation point
+    
+    def _step(self, X: np.ndarray, y: np.ndarray) -> float:
+        """Perform single FISTA optimization step.
+        
+        1. Compute gradient step at extrapolation point y
+        2. Update weights with momentum
+        3. Update momentum variable t
+        4. Compute new extrapolation point y
+        
+        Parameters
+        ----------
+        X : np.ndarray
+            Training data of shape (n_samples, n_features)
+        y : np.ndarray
+            Target values of shape (n_samples,)
+        """
+        if self.y is None:
+            self.y = np.zeros(X.shape[1])
+        
+        # Compute gradient at extrapolation point
+        grad = self.loss_obj.gradient(X, y, self.y)
+        
+        # Update weights
+        w_temp = self.y - self.step_size * grad
+        
+        # Soft-thresholding
+        alpha = self.loss_obj.alpha * self.step_size
+        w_new = np.sign(w_temp) * np.maximum(np.abs(w_temp) - alpha, 0)
+        
+        # Update momentum
+        t_new = (1 + np.sqrt(1 + 4 * self.t**2)) / 2
+        
+        # Update extrapolation point
+        self.y = w_new + ((self.t - 1) / t_new) * (w_new - self.w_)
+        
+        # Update variables for next iteration
+        self.w_ = w_new
+        self.t = t_new
+        
+        # Compute and return current loss
+        return self.loss_obj.compute(X, y, self.w_)
