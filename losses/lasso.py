@@ -1,60 +1,33 @@
-"""Lasso (L1 regularized) loss implementation."""
+"""
+Lasso loss (L1-regularised squared error):
+
+    f(w) = (1/2n)‖Xw − y‖²₂ + α‖w‖₁
+"""
+
+from __future__ import annotations
 
 import numpy as np
 from .base_loss import BaseLoss
 
 
 class LassoLoss(BaseLoss):
-    """Lasso loss with L1 regularization.
-    
-    Loss function: (1/2n)||Xw - y||² + α||w||₁
-    Gradient: (1/n)Xᵀ(Xw - y) + α sign(w)
-    """
-    
-    def __init__(self, alpha: float):
-        """Initialize Lasso loss with regularization parameter.
-        
-        Args:
-            alpha: L1 regularization coefficient (must be > 0)
-            
-        Raises:
-            ValueError: If alpha is not positive
-        """
+    """Lasso / L1 regularised least-squares."""
+
+    def __init__(self, alpha: float) -> None:
         if alpha <= 0:
-            raise ValueError("alpha must be positive")
-        self.alpha = alpha
-        
-    def compute(self, predictions: np.ndarray, targets: np.ndarray) -> float:
-        """Compute Lasso loss value.
-        
-        Args:
-            predictions: Model predictions (n_samples,)
-            targets: Ground truth values (n_samples,)
-            
-        Returns:
-            Computed loss value: (1/2n)||predictions - targets||² + α||w||₁
-        """
-        predictions = np.asarray(predictions)
-        targets = np.asarray(targets)
-        n = len(predictions)
-        residual = predictions - targets
-        mse = 0.5 * np.sum(residual ** 2) / n
-        l1_penalty = self.alpha * np.sum(np.abs(predictions))
-        return mse + l1_penalty
-        
-    def grad(self, predictions: np.ndarray, targets: np.ndarray) -> np.ndarray:
-        """Compute gradient of Lasso loss w.r.t. predictions.
-        
-        Args:
-            predictions: Model predictions (n_samples,)
-            targets: Ground truth values (n_samples,)
-            
-        Returns:
-            Gradient array: (1/n)(predictions - targets) + α sign(predictions)
-        """
-        predictions = np.asarray(predictions)
-        targets = np.asarray(targets)
-        n = len(predictions)
-        grad_mse = (predictions - targets) / n
-        grad_l1 = self.alpha * np.sign(predictions)
+            raise ValueError("alpha must be positive.")
+        self.alpha = float(alpha)
+
+    # ------------------------------------------------------------------ API
+    def compute(self, X: np.ndarray, y: np.ndarray, w: np.ndarray) -> float:
+        n = X.shape[0]
+        residual = X @ w - y
+        mse_part = 0.5 * np.dot(residual, residual) / n
+        l1_part = self.alpha * np.sum(np.abs(w))
+        return mse_part + l1_part
+
+    def grad(self, X: np.ndarray, y: np.ndarray, w: np.ndarray) -> np.ndarray:
+        n = X.shape[0]
+        grad_mse = X.T @ (X @ w - y) / n
+        grad_l1 = self.alpha * np.sign(w)
         return grad_mse + grad_l1

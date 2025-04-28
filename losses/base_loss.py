@@ -1,47 +1,44 @@
-"""Base loss module defining the abstract interface for loss functions.
+"""
+BaseLoss
+========
+Abstract interface for optimisation losses.
 
-All concrete loss implementations should inherit from BaseLoss and implement:
-- compute(): Computes the loss value given predictions and targets
-- grad(): Computes the gradient of the loss w.r.t. predictions
+Required core methods
+---------------------
+* compute(X, y, w) -> float
+* grad(X, y, w) -> np.ndarray
 
-Expected shapes:
-- predictions: (n_samples, n_outputs) array-like
-- targets: (n_samples, n_outputs) array-like
-- Return values:
-  - compute(): scalar
-  - grad(): same shape as predictions
+Compatibility aliases
+---------------------
+* gradient = grad   (some solvers expect .gradient)
+* loss      = compute  (older runner expects .loss)
 """
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
-from typing import Any
 import numpy as np
 
 
 class BaseLoss(ABC):
-    """Abstract base class for loss functions."""
-    
+    # ----------------------------------------------------- API to implement
     @abstractmethod
-    def compute(self, predictions: np.ndarray, targets: np.ndarray) -> float:
-        """Compute the loss value.
-        
-        Args:
-            predictions: Model predictions
-            targets: Ground truth values
-            
-        Returns:
-            Computed loss value (scalar)
-        """
-        pass
-    
+    def compute(self, X: np.ndarray, y: np.ndarray, w: np.ndarray) -> float:
+        """Return objective value f(w)."""
+        raise NotImplementedError
+
     @abstractmethod
-    def grad(self, predictions: np.ndarray, targets: np.ndarray) -> np.ndarray:
-        """Compute the gradient of the loss w.r.t. predictions.
-        
-        Args:
-            predictions: Model predictions
-            targets: Ground truth values
-            
-        Returns:
-            Gradient array with same shape as predictions
-        """
-        pass
+    def grad(self, X: np.ndarray, y: np.ndarray, w: np.ndarray) -> np.ndarray:
+        """Return gradient ∇f(w)."""
+        raise NotImplementedError
+
+    # --------------------------------------------------- backward aliases
+    def gradient(
+        self, X: np.ndarray, y: np.ndarray, w: np.ndarray
+    ) -> np.ndarray:  # noqa: D401
+        """Alias for :meth:`grad`."""
+        return self.grad(X, y, w)
+
+    def loss(self, X: np.ndarray, y: np.ndarray, w: np.ndarray) -> float:  # noqa: D401
+        """Alias for :meth:`compute` (kept for legacy code)."""
+        return self.compute(X, y, w)

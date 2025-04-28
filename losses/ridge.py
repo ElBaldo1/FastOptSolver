@@ -1,60 +1,33 @@
-"""Ridge (L2 regularized) loss implementation."""
+"""
+Ridge loss (L2-regularised squared error):
+
+    f(w) = (1/2n)‖Xw − y‖²₂ + α‖w‖²₂
+"""
+
+from __future__ import annotations
 
 import numpy as np
 from .base_loss import BaseLoss
 
 
 class RidgeLoss(BaseLoss):
-    """Ridge loss with L2 regularization.
-    
-    Loss function: (1/2n)||Xw - y||² + α||w||₂²
-    Gradient: (1/n)Xᵀ(Xw - y) + 2αw
-    """
-    
-    def __init__(self, alpha: float):
-        """Initialize Ridge loss with regularization parameter.
-        
-        Args:
-            alpha: L2 regularization coefficient (must be > 0)
-            
-        Raises:
-            ValueError: If alpha is not positive
-        """
+    """Ridge / L2 regularised least-squares."""
+
+    def __init__(self, alpha: float) -> None:
         if alpha <= 0:
-            raise ValueError("alpha must be positive")
-        self.alpha = alpha
-        
-    def compute(self, predictions: np.ndarray, targets: np.ndarray) -> float:
-        """Compute Ridge loss value.
-        
-        Args:
-            predictions: Model predictions (n_samples,)
-            targets: Ground truth values (n_samples,)
-            
-        Returns:
-            Computed loss value: (1/2n)||predictions - targets||² + α||w||₂²
-        """
-        predictions = np.asarray(predictions)
-        targets = np.asarray(targets)
-        n = len(predictions)
-        residual = predictions - targets
-        mse = 0.5 * np.sum(residual ** 2) / n
-        l2_penalty = self.alpha * np.sum(predictions ** 2)
-        return mse + l2_penalty
-        
-    def grad(self, predictions: np.ndarray, targets: np.ndarray) -> np.ndarray:
-        """Compute gradient of Ridge loss w.r.t. predictions.
-        
-        Args:
-            predictions: Model predictions (n_samples,)
-            targets: Ground truth values (n_samples,)
-            
-        Returns:
-            Gradient array: (1/n)(predictions - targets) + 2αw
-        """
-        predictions = np.asarray(predictions)
-        targets = np.asarray(targets)
-        n = len(predictions)
-        grad_mse = (predictions - targets) / n
-        grad_l2 = 2 * self.alpha * predictions
+            raise ValueError("alpha must be positive.")
+        self.alpha = float(alpha)
+
+    # ------------------------------------------------------------------ API
+    def compute(self, X: np.ndarray, y: np.ndarray, w: np.ndarray) -> float:
+        n = X.shape[0]
+        residual = X @ w - y
+        mse_part = 0.5 * np.dot(residual, residual) / n
+        l2_part = self.alpha * np.dot(w, w)
+        return mse_part + l2_part
+
+    def grad(self, X: np.ndarray, y: np.ndarray, w: np.ndarray) -> np.ndarray:
+        n = X.shape[0]
+        grad_mse = X.T @ (X @ w - y) / n
+        grad_l2 = 2.0 * self.alpha * w
         return grad_mse + grad_l2
