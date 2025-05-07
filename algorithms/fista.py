@@ -1,6 +1,6 @@
 import numpy as np
 from typing import Dict, Union
-from .base_solver import BaseSolver
+from .base_solver import BaseSolver, _check_gradient
 from losses.base_loss import BaseLoss
 
 class FISTA(BaseSolver):
@@ -22,13 +22,12 @@ class FISTA(BaseSolver):
         Tolerance for convergence checking
     """
     
-    def __init__(self, loss_obj: BaseLoss, step_size: float = 0.01, 
-                 max_iter: int = 1000, tol: float = 1e-4):
+    def __init__(self, loss_obj: BaseLoss, step_size=0.01, max_iter=1000, tol=1e-4):
         super().__init__(loss_obj, step_size, max_iter, tol)
         self.t = 1.0  # Momentum variable
         self.y = None  # Extrapolation point
     
-    def _step(self, X: np.ndarray, y: np.ndarray) -> float:
+    def _step(self, X: np.ndarray, y: np.ndarray, iteration: int) -> float:
         """Perform single FISTA optimization step.
         
         1. Compute gradient step at extrapolation point y
@@ -48,6 +47,13 @@ class FISTA(BaseSolver):
         
         # Compute gradient at extrapolation point
         grad = self.loss_obj.gradient(X, y, self.y)
+        _check_gradient(grad)
+
+        if not np.isfinite(self.y).all():
+            raise ValueError("Extrapolation point y contains NaN or Inf.")
+        
+        if iteration > 0 and iteration % 10 == 0 and self._verbose:
+            print(f"[Iter {iteration}] ||grad|| = {np.linalg.norm(grad):.4e}, ||y|| = {np.linalg.norm(self.y):.4e}")
         
         # Update weights
         w_temp = self.y - self.step_size * grad

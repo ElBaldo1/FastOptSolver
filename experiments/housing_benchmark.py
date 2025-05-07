@@ -16,7 +16,8 @@ def run_solver_on_housing(
     alpha2=None,
     step_size=1e-2,
     n_iter=100,
-    normalize=True
+    normalize=True,
+    verbose=False
 ):
     """
     Run specified solver and loss on housing dataset.
@@ -65,7 +66,8 @@ def run_solver_on_housing(
         X_train,
         y_train,
         n_iter,
-        step_size=step_size
+        step_size=step_size,
+        verbose=verbose
     )
 
     return results

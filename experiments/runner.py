@@ -23,6 +23,7 @@ def run_experiment(
     y: np.ndarray,
     n_iter: int,
     step_size: float = 1e-2,
+    verbose: bool = False
 ) -> Dict[str, object]:
     """
     Run an optimisation experiment for *n_iter* iterations.
@@ -53,12 +54,16 @@ def run_experiment(
             "history": List[float],
         }
     """
+    if step_size >= 1.0:
+        raise ValueError("Step size (lambda) must be less than 1 to guarantee convergence.")
+
     # ---------------------------------------------------- Instantiate solver
     solver = solver_cls(
         loss_obj,
         step_size=step_size,
         max_iter=n_iter
     )
+    solver.verbose = verbose
     history: List[float] = []
 
     with Timer() as timer:
@@ -69,6 +74,14 @@ def run_experiment(
         for _ in range(n_iter - 1):
             solver.step(X, y)
             history.append(loss_obj.loss(X, y, solver.w))
+
+    final_obj = history[-1]
+
+    # -----------------------------------------------------------
+    # ADD RECAP LOGGING
+    # -----------------------------------------------------------
+    if verbose:
+        print(f"[Recap] Solver: {solver.__class__.__name__} | Final Loss: {final_obj:.6f} | Time: {timer.elapsed:.2f}s")
 
     return {
         "solver": solver.__class__.__name__,

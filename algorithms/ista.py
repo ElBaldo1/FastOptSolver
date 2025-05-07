@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from .base_solver import BaseSolver
+from .base_solver import BaseSolver, _check_gradient
 from losses.base_loss import BaseLoss
 
 
@@ -25,17 +25,11 @@ def _soft_threshold(z: np.ndarray, lam: float) -> np.ndarray:
 class ISTA(BaseSolver):
     """Concrete implementation of ISTA (single-step logic in `_step`)."""
 
-    def __init__(
-        self,
-        loss_obj: BaseLoss,
-        step_size: float = 1e-2,
-        max_iter: int = 1000,
-        tol: float = 1e-4,
-    ) -> None:
+    def __init__(self, loss_obj: BaseLoss, step_size=1e-2, max_iter=1000, tol=1e-4):
         super().__init__(loss_obj, step_size, max_iter, tol)
 
     # ------------------------------------------------------------------ core
-    def _step(self, X: np.ndarray, y: np.ndarray) -> float:
+    def _step(self, X: np.ndarray, y: np.ndarray, iteration: int) -> float:
         """
         One ISTA iteration: gradient descent step + soft thresholding.
 
@@ -46,6 +40,7 @@ class ISTA(BaseSolver):
         """
         # Compute gradient of the smooth part
         grad = self.loss_obj.gradient(X, y, self.w_)
+        _check_gradient(grad)
 
         # Gradient step
         w_temp = self.w_ - self.step_size * grad

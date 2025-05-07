@@ -70,6 +70,11 @@ def run_grid_search_mock(
                                 "alpha2": alpha2,
                                 "step_size": step_size
                             })
+
+                            # ---------------- Recap stampa
+                            print(f"[{solver.__name__} | {loss} | α={alpha}, α2={alpha2}, step={step_size}] "
+                                  f"Final Obj: {res['final_obj']:.4e} in {res['iter']} iters")
+
                             results.append(res)
                     else:
                         # ----------------------- Lasso / Ridge experiment
@@ -92,6 +97,11 @@ def run_grid_search_mock(
                             "alpha2": None,
                             "step_size": step_size
                         })
+
+                        # ---------------- Recap stampa
+                        print(f"[{solver.__name__} | {loss} | α={alpha}, step={step_size}] "
+                              f"Final Obj: {res['final_obj']:.4e} in {res['iter']} iters")
+
                         results.append(res)
 
     df = pd.DataFrame(results)

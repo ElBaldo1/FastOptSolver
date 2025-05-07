@@ -38,6 +38,8 @@ class BaseSolver(ABC):
         self.w_: Optional[np.ndarray] = None  # lazy initialisation
         self.history_: Dict[str, List[float]] = {"loss": []}
 
+        self._verbose: bool = False  # NEW: default no printing
+
     # --------------------------------------------------------------------- #
     # Public helpers
     # --------------------------------------------------------------------- #
@@ -64,7 +66,8 @@ class BaseSolver(ABC):
         if self.w_ is None:
             self._init_params(X.shape[1])
 
-        loss_val = self._step(X, y)
+        iteration = len(self.history_["loss"])
+        loss_val = self._step(X, y, iteration)
         self.history_["loss"].append(loss_val)
         return loss_val
 
@@ -108,3 +111,18 @@ class BaseSolver(ABC):
         if X.shape[1] != self.w_.shape[0]:
             raise ValueError("Feature dimension mismatch.")
         return X @ self.w_
+    
+    @property
+    def verbose(self) -> bool:
+        return self._verbose
+
+    @verbose.setter
+    def verbose(self, value: bool) -> None:
+        self._verbose = value
+    
+def _check_gradient(grad: np.ndarray) -> None:
+    """
+    Check if the gradient contains valid (finite) values.
+    """
+    if not np.all(np.isfinite(grad)):
+        raise ValueError("Gradient contains NaN or Inf values.")
