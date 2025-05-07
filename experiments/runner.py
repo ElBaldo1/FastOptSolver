@@ -22,6 +22,7 @@ def run_experiment(
     X: np.ndarray,
     y: np.ndarray,
     n_iter: int,
+    step_size: float = 1e-2,
 ) -> Dict[str, object]:
     """
     Run an optimisation experiment for *n_iter* iterations.
@@ -29,16 +30,17 @@ def run_experiment(
     Parameters
     ----------
     solver_cls : Callable[..., BaseSolver]
-        Solver class (e.g. ISTA, FISTA) – it will be instantiated as
-        ``solver_cls(loss_obj)``.
+        Solver class (e.g. ISTA, FISTA).
     loss_obj : BaseLoss
-        Loss function providing ``loss(X, y, w)``.
+        Loss function providing loss(X, y, w).
     X : np.ndarray, shape (n_samples, n_features)
         Feature matrix.
     y : np.ndarray, shape (n_samples,)
         Target vector.
     n_iter : int
-        Number of calls to ``solver.step`` to perform.
+        Number of iterations.
+    step_size : float
+        Learning rate / step size for the solver.
 
     Returns
     -------
@@ -51,7 +53,12 @@ def run_experiment(
             "history": List[float],
         }
     """
-    solver = solver_cls(loss_obj)
+    # ---------------------------------------------------- Instantiate solver
+    solver = solver_cls(
+        loss_obj,
+        step_size=step_size,
+        max_iter=n_iter
+    )
     history: List[float] = []
 
     with Timer() as timer:

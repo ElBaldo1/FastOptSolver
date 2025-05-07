@@ -1,36 +1,29 @@
 import matplotlib.pyplot as plt
-from typing import Dict, List, Optional
-import numpy as np
 
-def plot_convergence(history_dict: Dict[str, List[float]], ax: Optional[plt.Axes] = None) -> plt.Axes:
-    """Plot convergence history of optimization algorithms.
-    
-    Args:
-        history_dict: Dictionary mapping algorithm names to their objective values over iterations
-        ax: Optional matplotlib Axes object to plot on. If None, creates new figure.
-        
-    Returns:
-        plt.Axes: The Axes object containing the plot
-        
-    Example:
-        >>> history = {'GD': [10, 5, 3, 2], 'SGD': [10, 6, 4, 3]}
-        >>> ax = plot_convergence(history)
-        >>> plt.show()
+def plot_convergence(histories: dict):
     """
-    if not history_dict:
-        raise ValueError("history_dict cannot be empty")
-        
-    if ax is None:
-        _, ax = plt.subplots(figsize=(8, 5))
-        
-    for name, values in history_dict.items():
-        iterations = np.arange(1, len(values) + 1)
-        ax.plot(iterations, values, label=name, marker='o', markersize=4)
-        
-    ax.set_xlabel('Iteration')
-    ax.set_ylabel('Objective Value')
-    ax.set_title('Convergence History')
-    ax.grid(True)
-    ax.legend()
-    
-    return ax
+    Plot convergence curves for multiple solvers.
+
+    Parameters
+    ----------
+    histories : dict
+        Dictionary where keys are solver names and values are lists of objective values.
+        Example:
+            {
+                'ISTA': [loss_1, loss_2, ..., loss_n],
+                'FISTA': [loss_1, loss_2, ..., loss_n],
+                ...
+            }
+    """
+    plt.figure(figsize=(8, 5))
+
+    for label, history in histories.items():
+        plt.plot(history, label=label)
+
+    plt.xlabel("Iteration")
+    plt.ylabel("Objective value")
+    plt.title("Convergence comparison")
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
