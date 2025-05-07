@@ -18,6 +18,7 @@ class ElasticNetLoss(BaseLoss):
             raise ValueError("alpha1 and alpha2 must be positive.")
         self.alpha1 = float(alpha1)
         self.alpha2 = float(alpha2)
+        self.alpha = self.alpha1  # Alias for compatibility with ISTA/FISTA
 
     # ------------------------------------------------------------------ API
     def compute(self, X: np.ndarray, y: np.ndarray, w: np.ndarray) -> float:
