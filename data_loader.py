@@ -128,3 +128,61 @@ def load_housing(
         X_test = scaler.transform(X_test)
 
     return X_train, X_test, y_train, y_test
+
+# ---------------------------------------------------------------------------#
+# Synthetic Mock Data
+# ---------------------------------------------------------------------------#
+def load_mock_data(
+    n_samples: int = 100,
+    n_features: int = 50,
+    n_nonzero: int = 10,
+    noise_std: float = 0.1,
+    random_state: int | None = None,
+    normalize: bool = False,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Generates a synthetic linear regression dataset with sparse ground truth.
+
+    Parameters
+    ----------
+    n_samples : int, default=100
+        Number of samples.
+    n_features : int, default=50
+        Number of features.
+    n_nonzero : int, default=10
+        Number of non-zero coefficients in the true weight vector.
+    noise_std : float, default=0.1
+        Standard deviation of Gaussian noise added to targets.
+    random_state : int or None
+        Random seed.
+    normalize : bool, default=False
+        If True, standardizes X_train and X_test.
+
+    Returns
+    -------
+    X_train, X_test, y_train, y_test : np.ndarray
+    """
+    rng = np.random.default_rng(random_state)
+
+    # -------------------------- True coefficients (sparse)
+    w_true = np.zeros(n_features)
+    nonzero_idx = rng.choice(n_features, n_nonzero, replace=False)
+    w_true[nonzero_idx] = rng.normal(0, 1, size=n_nonzero)
+
+    # -------------------------- Features
+    X = rng.normal(0, 1, size=(n_samples, n_features))
+
+    # -------------------------- Targets with noise
+    y = X @ w_true + rng.normal(0, noise_std, size=n_samples)
+
+    # -------------------------- Train/test split
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=random_state
+    )
+
+    if normalize:
+        scaler = StandardScaler()
+        X_train = scaler.fit_transform(X_train)
+        X_test = scaler.transform(X_test)
+
+    return X_train, X_test, y_train, y_test
