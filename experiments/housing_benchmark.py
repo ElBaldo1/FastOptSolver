@@ -68,9 +68,4 @@ def run_solver_on_housing(
         step_size=step_size
     )
 
-    # ------------------------------- Plot convergence
-    plot_convergence({
-        solver_cls.__name__: results["history"]
-    })
-
     return results
