@@ -3,6 +3,7 @@ import numpy as np
 from algorithms.ista import ISTA
 from algorithms.fista import FISTA
 from experiments.housing_benchmark import run_solver_on_housing
+from algorithms.lbfgs import LBFGSSolver
 
 def run_grid_search():
     """
@@ -13,7 +14,7 @@ def run_grid_search():
     pd.DataFrame
         Summary results for all experiment configurations.
     """
-    solvers = [ISTA, FISTA]
+    solvers = [ISTA, FISTA, LBFGSSolver]
     losses = ["lasso", "ridge", "elasticnet"]
 
     alphas = [0.001, 0.01, 0.1]
@@ -27,6 +28,10 @@ def run_grid_search():
         for loss in losses:
             for alpha in alphas:
                 for step_size in step_sizes:
+
+                    # Skip L-BFGS for Lasso (not differentiable)
+                    if loss == "lasso" and solver == LBFGSSolver:
+                        continue
 
                     if loss == "elasticnet":
                         for alpha2 in alpha2s:

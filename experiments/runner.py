@@ -28,64 +28,44 @@ def run_experiment(
     """
     Run an optimisation experiment for *n_iter* iterations.
 
-    Parameters
-    ----------
-    solver_cls : Callable[..., BaseSolver]
-        Solver class (e.g. ISTA, FISTA).
-    loss_obj : BaseLoss
-        Loss function providing loss(X, y, w).
-    X : np.ndarray, shape (n_samples, n_features)
-        Feature matrix.
-    y : np.ndarray, shape (n_samples,)
-        Target vector.
-    n_iter : int
-        Number of iterations.
-    step_size : float
-        Learning rate / step size for the solver.
-
-    Returns
-    -------
-    dict
-        {
-            "solver": str,
-            "final_obj": float,
-            "elapsed": float,
-            "iter": int,
-            "history": List[float],
-        }
+    If the solver does not support step(), fall back to full fit().
     """
-    if step_size >= 1.0:
-        raise ValueError("Step size (lambda) must be less than 1 to guarantee convergence.")
+    from algorithms.lbfgs import LBFGSSolver
 
-    # ---------------------------------------------------- Instantiate solver
-    solver = solver_cls(
-        loss_obj,
-        step_size=step_size,
-        max_iter=n_iter
-    )
+    if solver_cls == LBFGSSolver:
+        solver = solver_cls(
+            loss_obj=loss_obj,
+            max_iter=n_iter
+        )
+    else:
+        solver = solver_cls(
+            loss_obj=loss_obj,
+            step_size=step_size,
+            max_iter=n_iter
+        )
     solver.verbose = verbose
-    history: List[float] = []
+
+    history = []
 
     with Timer() as timer:
-        # Optional: log initial objective (w = 0) for nicer convergence curve
-        solver.step(X, y)  # first step initialises weights and updates once
-        history.append(loss_obj.loss(X, y, solver.w))
-
-        for _ in range(n_iter - 1):
+        if isinstance(solver, LBFGSSolver):
+            solver.fit(X, y)
+            history = solver.history_["loss"]
+        else:
             solver.step(X, y)
             history.append(loss_obj.loss(X, y, solver.w))
+            for _ in range(n_iter - 1):
+                solver.step(X, y)
+                history.append(loss_obj.loss(X, y, solver.w))
 
     final_obj = history[-1]
 
-    # -----------------------------------------------------------
-    # ADD RECAP LOGGING
-    # -----------------------------------------------------------
     if verbose:
         print(f"[Recap] Solver: {solver.__class__.__name__} | Final Loss: {final_obj:.6f} | Time: {timer.elapsed:.2f}s")
 
     return {
         "solver": solver.__class__.__name__,
-        "final_obj": history[-1],
+        "final_obj": final_obj,
         "elapsed": timer.elapsed,
         "iter": n_iter,
         "history": history,
