@@ -18,7 +18,7 @@ class DualFISTA(BaseSolver):
         alpha = self.loss_obj.alpha  # assume loss is LassoLoss
         Lipschitz = np.linalg.norm(X, ord=2) ** 2
 
-        u = np.zeros(n)
+        u = np.random.randn(n) * 0.01
         z = np.zeros(n)
         t = 1.0
 
@@ -32,8 +32,11 @@ class DualFISTA(BaseSolver):
 
             # Project u onto the feasible set ||X^T u||_∞ ≤ alpha
             XTu = X.T @ u
-            if np.max(np.abs(XTu)) > alpha:
-                u = u * (alpha / np.max(np.abs(XTu)))
+            norm_XTu = np.max(np.abs(XTu))
+
+            if norm_XTu > alpha:
+                scaling = alpha / norm_XTu
+                u = u * scaling
 
             t_next = (1 + np.sqrt(1 + 4 * t ** 2)) / 2
             z = u + ((t - 1) / t_next) * (u - u_old)
@@ -42,6 +45,10 @@ class DualFISTA(BaseSolver):
             # Recover primal variable from dual iterate
             w = self._soft_thresholding(X.T @ u, alpha)
             loss_val = self.loss_obj.compute(X, y, w)
+
+            if self.verbose:
+                print(f"[DualFISTA] Iter {k:3d} | loss = {loss_val:.6f} | ||u|| = {np.linalg.norm(u):.4f} | max|X^T u| = {np.max(np.abs(X.T @ u)):.4f}")
+
             self.history_["loss"].append(loss_val)
 
             if self.verbose and k % 10 == 0:
@@ -51,6 +58,10 @@ class DualFISTA(BaseSolver):
                 break
 
         self.w_ = w
+
+        if self.verbose:
+            print(f"[DualFISTA] Final loss = {self.history_['loss'][-1]:.6f} | iters: {len(self.history_['loss'])}")
+
         return self
     
     def _step(self, X: np.ndarray, y: np.ndarray, iteration: int) -> float:
