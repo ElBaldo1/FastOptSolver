@@ -14,6 +14,8 @@ import numpy as np
 from utils.timer import Timer
 from algorithms.base_solver import BaseSolver
 from losses.base_loss import BaseLoss
+from algorithms.lbfgs import LBFGSSolver
+from algorithms.dual_fista import DualFISTA
 
 
 def run_experiment(
@@ -30,9 +32,14 @@ def run_experiment(
 
     If the solver does not support step(), fall back to full fit().
     """
-    from algorithms.lbfgs import LBFGSSolver
 
-    if solver_cls == LBFGSSolver:
+    if solver_cls == DualFISTA:
+        solver = solver_cls(
+            loss_obj=loss_obj,
+            step_size=step_size,
+            max_iter=n_iter
+        )
+    elif solver_cls == LBFGSSolver:
         solver = solver_cls(
             loss_obj=loss_obj,
             max_iter=n_iter
@@ -48,7 +55,7 @@ def run_experiment(
     history = []
 
     with Timer() as timer:
-        if isinstance(solver, LBFGSSolver):
+        if isinstance(solver, (LBFGSSolver, DualFISTA)):
             solver.fit(X, y)
             history = solver.history_["loss"]
         else:

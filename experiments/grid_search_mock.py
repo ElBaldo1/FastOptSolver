@@ -4,6 +4,7 @@ from algorithms.ista import ISTA
 from algorithms.fista import FISTA
 from experiments.mock_benchmark import run_solver_on_mock
 from algorithms.lbfgs import LBFGSSolver
+from algorithms.dual_fista import DualFISTA
 
 def run_grid_search_mock(
     n_samples=100,
@@ -33,7 +34,7 @@ def run_grid_search_mock(
     pd.DataFrame
         Summary results for all experiment configurations.
     """
-    solvers = [ISTA, FISTA, LBFGSSolver]
+    solvers = [ISTA, FISTA, LBFGSSolver, DualFISTA]
     losses = ["lasso", "ridge", "elasticnet"]
 
     alphas = [0.001, 0.01, 0.1]
@@ -50,6 +51,10 @@ def run_grid_search_mock(
 
                     # Skip L-BFGS for Lasso (not differentiable)
                     if loss == "lasso" and solver == LBFGSSolver:
+                        continue
+
+                    # Skip DualFISTA for Ridge and ElasticNet (not a dual-friendly form)
+                    if loss in ["ridge", "elasticnet"] and solver == DualFISTA:
                         continue
 
                     if loss == "elasticnet":
