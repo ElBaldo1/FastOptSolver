@@ -15,7 +15,7 @@ All solvers are tested on both synthetic and real datasets, under different regu
 
 ## Main Interface
 
-The main entry point is the `FastOptSolver.ipynb` Jupyter Notebook. It contains:
+The main entry point is the Jupyter Notebook `FastOptSolver.ipynb`. It contains:
 
 - Background theory and convergence analysis
 - Implementation notes for each algorithm
@@ -27,53 +27,50 @@ The notebook is fully annotated with Markdown cells for pedagogical clarity and 
 
 ## Project Structure
 
+```
 .
 ├── algorithms/            # Core optimization algorithms (ISTA, FISTA, DualFISTA, LBFGS)
-├── losses/               # Lasso, Ridge, ElasticNet loss functions
-├── experiments/          # Experiment runner, grid search, baselines, plotting tools
-├── dataset/              # Contains Housing.csv (real dataset)
-├── data_loader.py        # Robust loader for real and synthetic datasets
-├── utils/                # Timing utilities, helpers
-├── FastOptSolver.ipynb   # Main notebook (report-style)
-
-## Features
-
-- Modular solvers with step-wise and batch optimization
-- Dual formulation of Lasso via Dual-FISTA
-- Gradient validation and numerical safety checks
-- Integration of sklearn baselines (Lasso, Ridge, ElasticNet)
-- Grid search over solver × loss × hyperparameter combinations
-- Heatmaps and visual performance comparisons
+├── losses/                # Lasso, Ridge, ElasticNet loss functions
+├── experiments/           # Experiment runner, grid search, baselines, plotting tools
+├── dataset/               # Contains Housing.csv (real dataset)
+├── data_loader.py         # Robust loader for real and synthetic datasets
+├── utils/                 # Timing utilities, helpers
+├── FastOptSolver.ipynb    # Main notebook (report-style)
+```
 
 ## Requirements
 
 - Python ≥ 3.8
-- NumPy, SciPy, Pandas
+- NumPy
+- SciPy
+- Pandas
 - scikit-learn
-- Matplotlib, Seaborn
+- Matplotlib
+- Seaborn
 - Jupyter Notebook
 
-To install dependencies:
+Install the required packages with:
 
-```
+```bash
 pip install -r requirements.txt
 ```
 
 ## Running the Project
 
-To explore the solvers and experiments:
+To explore the solvers and run the experiments:
 
-1. Launch Jupyter:
-   ```
+1. Navigate to the project folder in your terminal
+2. Start the Jupyter Notebook server:
+   ```bash
    jupyter notebook
    ```
-2. Open `FastOptSolver.ipynb`
-3. Follow each section sequentially for code, theory, and experiments
+3. In the Jupyter interface, open the file `FastOptSolver.ipynb`
+4. Execute the notebook cell by cell, following the included Markdown explanations for each section (theory, implementation, experiments)
 
 ## Dataset
 
-- Real dataset: `Housing.csv` (Boston Housing-style)
-- Synthetic dataset generator: sparse regression problems with controllable dimensionality and noise
+- **Real dataset**: `Housing.csv` in the `dataset/` directory
+- **Synthetic dataset**: generated on the fly using `load_mock_data()` from `data_loader.py`
 
 ## License
 
