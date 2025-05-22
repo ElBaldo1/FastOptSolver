@@ -41,13 +41,15 @@ def run_grid_search():
                     if loss == "elasticnet":
                         for alpha2 in alpha2s:
                             # ----------------------- ElasticNet experiment
+                            adaptive = solver in [LBFGSSolver, DualFISTA]
                             res = run_solver_on_housing(
                                 solver_cls=solver,
                                 loss_name=loss,
                                 alpha=alpha,
                                 alpha2=alpha2,
                                 step_size=step_size,
-                                n_iter=n_iter
+                                n_iter=n_iter,
+                                adaptive=adaptive
                             )
                             res.update({
                                 "solver": solver.__name__,
@@ -64,12 +66,14 @@ def run_grid_search():
                             results.append(res)
                     else:
                         # ----------------------- Lasso / Ridge experiment
+                        adaptive = solver in [LBFGSSolver, DualFISTA]
                         res = run_solver_on_housing(
                             solver_cls=solver,
                             loss_name=loss,
                             alpha=alpha,
                             step_size=step_size,
-                            n_iter=n_iter
+                            n_iter=n_iter,
+                            adaptive=adaptive
                         )
                         res.update({
                             "solver": solver.__name__,

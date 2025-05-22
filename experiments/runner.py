@@ -25,7 +25,8 @@ def run_experiment(
     y: np.ndarray,
     n_iter: int,
     step_size: float = 1e-2,
-    verbose: bool = False
+    verbose: bool = False,
+    adaptive: bool = False
 ) -> Dict[str, object]:
     """
     Run an optimisation experiment for *n_iter* iterations.
@@ -55,15 +56,22 @@ def run_experiment(
     history = []
 
     with Timer() as timer:
-        if isinstance(solver, (LBFGSSolver, DualFISTA)):
+        if adaptive:
             solver.fit(X, y)
             history = solver.history_["loss"]
+            n_effective_iter = len(history)
+            if verbose:
+                print(f"[Adaptive] Stopped after {n_effective_iter} iterations")
         else:
+            if isinstance(solver, (LBFGSSolver, DualFISTA)):
+                raise RuntimeError(f"{solver.__class__.__name__} requires adaptive=True to run.")
+            history = []
             solver.step(X, y)
             history.append(loss_obj.loss(X, y, solver.w))
             for _ in range(n_iter - 1):
                 solver.step(X, y)
                 history.append(loss_obj.loss(X, y, solver.w))
+            n_effective_iter = n_iter
 
     final_obj = history[-1]
 
@@ -74,7 +82,7 @@ def run_experiment(
         "solver": solver.__class__.__name__,
         "final_obj": final_obj,
         "elapsed": timer.elapsed,
-        "iter": n_iter,
+        "iter": n_effective_iter,
         "history": history,
         "w": solver.w if hasattr(solver, "w") else None,
         "profile": getattr(solver, "profile_", {})

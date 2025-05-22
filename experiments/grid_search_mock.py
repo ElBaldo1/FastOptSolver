@@ -59,6 +59,7 @@ def run_grid_search_mock(
 
                     if loss == "elasticnet":
                         for alpha2 in alpha2s:
+                            adaptive = solver in [LBFGSSolver, DualFISTA]
                             # ----------------------- ElasticNet experiment
                             res = run_solver_on_mock(
                                 solver_cls=solver,
@@ -71,7 +72,8 @@ def run_grid_search_mock(
                                 n_features=n_features,
                                 n_nonzero=n_nonzero,
                                 noise_std=noise_std,
-                                random_state=random_state
+                                random_state=random_state,
+                                adaptive=adaptive
                             )
                             res.update({
                                 "solver": solver.__name__,
@@ -87,6 +89,7 @@ def run_grid_search_mock(
 
                             results.append(res)
                     else:
+                        adaptive = solver in [LBFGSSolver, DualFISTA]
                         # ----------------------- Lasso / Ridge experiment
                         res = run_solver_on_mock(
                             solver_cls=solver,
@@ -98,7 +101,8 @@ def run_grid_search_mock(
                             n_features=n_features,
                             n_nonzero=n_nonzero,
                             noise_std=noise_std,
-                            random_state=random_state
+                            random_state=random_state,
+                            adaptive=adaptive
                         )
                         res.update({
                             "solver": solver.__name__,

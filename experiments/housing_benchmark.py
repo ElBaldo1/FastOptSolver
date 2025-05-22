@@ -18,7 +18,8 @@ def run_solver_on_housing(
     n_iter=100,
     normalize=True,
     random_state=None,
-    verbose=False
+    verbose=False,
+    adaptive=False
 ):
     """
     Run specified solver and loss on housing dataset.
@@ -39,6 +40,8 @@ def run_solver_on_housing(
         Number of iterations.
     normalize : bool
         Whether to normalize features.
+    adaptive : bool
+        Whether to stop based on solver tolerance (instead of fixed iteration count).
 
     Returns
     -------
@@ -46,7 +49,7 @@ def run_solver_on_housing(
         Experiment result dictionary.
     """
     # ------------------------------- Load data
-    X_train, _, y_train, _ = load_housing(normalize=normalize)
+    X_train, _, y_train, _ = load_housing(normalize=normalize, random_state=random_state)
 
     # ------------------------------- Define loss
     if loss_name.lower() == "lasso":
@@ -68,7 +71,8 @@ def run_solver_on_housing(
         y_train,
         n_iter,
         step_size=step_size,
-        verbose=verbose
+        verbose=verbose,
+        adaptive=adaptive
     )
 
     return results

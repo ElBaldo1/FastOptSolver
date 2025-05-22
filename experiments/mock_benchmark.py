@@ -22,7 +22,8 @@ def run_solver_on_mock(
     n_nonzero=10,
     noise_std=0.1,
     random_state=None,
-    verbose=False
+    verbose=False,
+    adaptive=False
 ):
     """
     Run specified solver and loss on synthetic mock dataset.
@@ -89,7 +90,8 @@ def run_solver_on_mock(
         y_train,
         n_iter,
         step_size=step_size,
-        verbose=verbose
+        verbose=verbose,
+        adaptive=adaptive
     )
 
     return results
