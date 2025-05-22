@@ -3,6 +3,16 @@ from typing import Dict, Union
 from .base_solver import BaseSolver, _check_gradient
 from losses.base_loss import BaseLoss
 
+import time
+
+"""
+FISTA solver (accelerated proximal gradient)
+
+Convergence rate: O(1/k^2)  
+Time complexity: O(n·d)  
+Memory: O(d)  
+Tracks gradient and step times per iteration
+"""
 class FISTA(BaseSolver):
     """Fast Iterative Shrinkage-Thresholding Algorithm (FISTA) solver.
     
@@ -46,7 +56,9 @@ class FISTA(BaseSolver):
             self.y = np.zeros(X.shape[1])
         
         # Compute gradient at extrapolation point
+        t_grad0 = time.perf_counter()
         grad = self.loss_obj.gradient(X, y, self.y)
+        t_grad1 = time.perf_counter()
         _check_gradient(grad)
 
         if not np.isfinite(self.y).all():
@@ -71,6 +83,8 @@ class FISTA(BaseSolver):
         # Update variables for next iteration
         self.w_ = w_new
         self.t = t_new
+
+        self.profile_["grad_time"].append(t_grad1 - t_grad0)
         
         # Compute and return current loss
         return self.loss_obj.compute(X, y, self.w_)

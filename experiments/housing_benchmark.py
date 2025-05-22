@@ -11,12 +11,13 @@ from utils.plotting import plot_convergence
 
 def run_solver_on_housing(
     solver_cls,
-    loss_name="lasso",
-    alpha=0.1,
+    loss_name,
+    alpha,
     alpha2=None,
-    step_size=1e-2,
+    step_size=0.01,
     n_iter=100,
     normalize=True,
+    random_state=None,
     verbose=False
 ):
     """

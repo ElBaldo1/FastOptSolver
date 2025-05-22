@@ -76,4 +76,6 @@ def run_experiment(
         "elapsed": timer.elapsed,
         "iter": n_iter,
         "history": history,
+        "w": solver.w if hasattr(solver, "w") else None,
+        "profile": getattr(solver, "profile_", {})
     }

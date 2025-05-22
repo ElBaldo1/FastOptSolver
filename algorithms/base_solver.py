@@ -19,7 +19,15 @@ from typing import Dict, List, Optional
 import numpy as np
 from losses.base_loss import BaseLoss
 
+import time
 
+"""
+BaseSolver (abstract)
+
+Memory complexity: O(n·d) for dataset, O(d) for weights/gradients  
+Time complexity: O(n·d) per iteration (full gradient step)  
+Profiling support: tracks step time, can be extended per solver
+"""
 class BaseSolver(ABC):
     """Parent class for ISTA, FISTA, etc."""
 
@@ -39,6 +47,8 @@ class BaseSolver(ABC):
         self.history_: Dict[str, List[float]] = {"loss": []}
 
         self._verbose: bool = False  # NEW: default no printing
+
+        self.profile_ = {"grad_time": [], "step_time": []}
 
     # --------------------------------------------------------------------- #
     # Public helpers
@@ -67,8 +77,14 @@ class BaseSolver(ABC):
             self._init_params(X.shape[1])
 
         iteration = len(self.history_["loss"])
+
+        t0 = time.perf_counter()
         loss_val = self._step(X, y, iteration)
+        t1 = time.perf_counter()
+
         self.history_["loss"].append(loss_val)
+        self.profile_["step_time"].append(t1 - t0)
+
         return loss_val
 
     # --------------------------------------------------------------------- #
