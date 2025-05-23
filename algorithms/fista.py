@@ -64,8 +64,13 @@ class FISTA(BaseSolver):
         if not np.isfinite(self.y).all():
             raise ValueError("Extrapolation point y contains NaN or Inf.")
         
+        grad_norm = np.linalg.norm(grad)
+        if "grad_norms" not in self.profile_:
+            self.profile_["grad_norms"] = []
+        self.profile_["grad_norms"].append(grad_norm)
+
         if iteration > 0 and iteration % 10 == 0 and self._verbose:
-            print(f"[Iter {iteration}] ||grad|| = {np.linalg.norm(grad):.4e}, ||y|| = {np.linalg.norm(self.y):.4e}")
+            print(f"[Iter {iteration}] ||grad|| = {grad_norm:.4e}, ||y|| = {np.linalg.norm(self.y):.4e}")
         
         # Update weights
         w_temp = self.y - self.step_size * grad

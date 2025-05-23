@@ -53,6 +53,11 @@ class ISTA(BaseSolver):
         t_grad1 = time.perf_counter()
         _check_gradient(grad)
 
+        grad_norm = np.linalg.norm(grad)
+        if "grad_norms" not in self.profile_:
+            self.profile_["grad_norms"] = []
+        self.profile_["grad_norms"].append(grad_norm)
+
         # Gradient step
         w_temp = self.w_ - self.step_size * grad
 

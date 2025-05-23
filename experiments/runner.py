@@ -85,5 +85,5 @@ def run_experiment(
         "iter": n_effective_iter,
         "history": history,
         "w": solver.w if hasattr(solver, "w") else None,
-        "profile": getattr(solver, "profile_", {})
+        **getattr(solver, "profile_", {})
     }
