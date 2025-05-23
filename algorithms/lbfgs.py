@@ -39,6 +39,9 @@ class LBFGSSolver(BaseSolver):
         def obj_fun(w):
             loss = self.loss_obj.compute(X, y, w)
             grad = self.loss_obj.grad(X, y, w)
+            if "grad_norms" not in self.profile_:
+                self.profile_["grad_norms"] = []
+            self.profile_["grad_norms"].append(np.linalg.norm(grad))
             return loss, grad
 
         # Optimize

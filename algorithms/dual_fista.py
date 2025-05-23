@@ -28,6 +28,13 @@ class DualFISTA(BaseSolver):
             u_old = u.copy()
             grad = z - y  # gradient of f(z) = 0.5 * ||z - y||^2
 
+            grad_norm = np.linalg.norm(grad)
+            if "grad_norms" not in self.profile_:
+                self.profile_["grad_norms"] = []
+            self.profile_["grad_norms"].append(grad_norm)
+
+            u = z - self.step_size * grad
+
             u = z - self.step_size * grad
 
             # Project u onto the feasible set ||X^T u||_∞ ≤ alpha
