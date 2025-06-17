@@ -1,3 +1,4 @@
+
 import numpy as np
 from objective_functions import compute_objective
 from prox_operators import select_prox_operator
@@ -26,6 +27,12 @@ def ista(A, b, reg_type="lasso", alpha1=0.1, alpha2=0.1,
       minimize ½||Ax−b||² + h(x)
     where h(x)=alpha1||x||₁ (+ alpha2||x||² for elasticnet).
     """
+    if reg_type == "ridge":
+        raise ValueError("ISTA not suitable for smooth-only problems like Ridge. Use L-BFGS instead.")
+
+    if reg_type == "elasticnet" and alpha1 < 1e-6:
+        raise ValueError("ISTA/FISTA not suitable for Elastic Net with alpha1 ≈ 0 (smooth-only). Use L-BFGS.")
+
     m, n = A.shape
     x = np.zeros(n)
     L = estimate_lipschitz(A)
@@ -51,6 +58,12 @@ def fista(A, b, reg_type="lasso", alpha1=0.1, alpha2=0.1,
     """
     FISTA (accelerated ISTA) for Lasso/Elastic‐Net.
     """
+    if reg_type == "ridge":
+        raise ValueError("FISTA not suitable for smooth-only problems like Ridge. Use L-BFGS instead.")
+
+    if reg_type == "elasticnet" and alpha1 < 1e-6:
+        raise ValueError("ISTA/FISTA not suitable for Elastic Net with alpha1 ≈ 0 (smooth-only). Use L-BFGS.")
+
     m, n = A.shape
     x = np.zeros(n)
     y = x.copy()
