@@ -125,3 +125,74 @@ def fista(A, b, reg_type="lasso", alpha1=0.1, alpha2=0.1,
         )
 
     return x, obj_vals
+
+
+def fista_delta(A, b, reg_type="lasso", alpha1=0.1, alpha2=0.1,
+                delta=3.0, max_iter=1000, tol=1e-6):
+    """
+    FISTA variant with custom momentum update controlled by delta > 2.
+    Implements the update rule:
+        θ_k = (k) / (k + 1 + δ)
+    to preserve O(1/k²) convergence rate.
+
+    Parameters:
+        A        : design matrix
+        b        : target vector
+        reg_type : "lasso" or "elasticnet"
+        alpha1   : L1 regularization coefficient
+        alpha2   : L2 regularization coefficient
+        delta    : parameter > 2 controlling the inertial weight
+        max_iter : maximum number of iterations
+        tol      : stopping threshold based on ||x^{k+1} − x^k||
+
+    Returns:
+        x        : final solution
+        obj_vals : list of objective values per iteration
+    """
+    if reg_type == "ridge":
+        raise ValueError("FISTA not suitable for smooth-only problems like Ridge. Use L-BFGS instead.")
+
+    if reg_type == "elasticnet" and alpha1 < 1e-6:
+        raise ValueError("FISTA not suitable for Elastic Net with alpha1 ≈ 0. Use L-BFGS.")
+
+    m, n = A.shape
+    x_old = np.zeros(n)
+    x = x_old.copy()
+    y = x.copy()
+    L = estimate_lipschitz(A)
+
+    obj_vals = []
+
+    for k in range(max_iter):
+        grad = A.T @ (A @ y - b)
+        v = y - grad / L
+        x_new = select_prox_operator(v, 1/L,
+                                     reg_type=reg_type,
+                                     alpha1=alpha1,
+                                     alpha2=alpha2)
+
+        # compute inertial weight θ_k = k / (k+1+δ)
+        theta_k = k / (k + 1 + delta)
+        y = x_new + theta_k * (x_new - x)
+
+        # convergence check
+        if np.linalg.norm(x_new - x) < tol:
+            obj_vals.append(
+                compute_objective(x_new, A, b,
+                                  reg_type=reg_type,
+                                  alpha1=alpha1,
+                                  alpha2=alpha2)
+            )
+            break
+
+        x = x_new
+
+        obj_vals.append(
+            compute_objective(x, A, b,
+                              reg_type=reg_type,
+                              alpha1=alpha1,
+                              alpha2=alpha2)
+        )
+
+    return x, obj_vals
+
