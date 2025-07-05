@@ -75,7 +75,7 @@ def ista(A, b, reg_type="lasso", alpha1=0.1, alpha2=0.1,
     return x, obj_vals
 
 def fista(A, b, reg_type="lasso", alpha1=0.1, alpha2=0.1,
-          max_iter=1000):
+          max_iter=1000, tol=1e-6):
     """
     FISTA (accelerated ISTA) for Lasso or Elastic-Net problems.
     """
@@ -96,10 +96,20 @@ def fista(A, b, reg_type="lasso", alpha1=0.1, alpha2=0.1,
     for k in range(max_iter):
         grad = A.T @ (A @ y - b)
         v = y - grad / L
-        x_new = select_prox_operator(v, 1/L,
+        x_new = select_prox_operator(v, 1 / L,
                                      reg_type=reg_type,
                                      alpha1=alpha1,
                                      alpha2=alpha2)
+
+        # 🟡 STOP: arresto se ||x_{k+1} - x_k|| < tol
+        if np.linalg.norm(x_new - x) < tol:
+            obj_vals.append(
+                compute_objective(x_new, A, b,
+                                  reg_type=reg_type,
+                                  alpha1=alpha1,
+                                  alpha2=alpha2)
+            )
+            break
 
         t_new = 0.5 * (1 + np.sqrt(1 + 4 * t * t))
         y = x_new + ((t - 1) / t_new) * (x_new - x)
