@@ -78,61 +78,99 @@ def ista(
         return x, {'x': xs, 'step_sizes': deltas, 't_values': ts}
     return x
 
-# --- FISTA: Accelerated ISTA with optional adaptive restart ---
-def fista(
-    A, b, reg_type, alpha1, alpha2,
-    max_iter=500, tol=0.0,
-    adaptive_restart=False, restart_threshold=1.0,
-    return_history=False
-):
+# --- FISTA with optional adaptive restart, stopping & history support ---
+def fista(A, b, reg_type, alpha1, alpha2,
+          max_iter=500, tol=0.0,
+          adaptive_restart=False, restart_threshold=1.0,
+          return_history=False):
     """
-    FISTA for Lasso/Elastic-Net:
-      - adaptive_restart resets momentum when ratio>threshold
-      - records objective history
+    FISTA for three cases:
+      - lasso:       g(x)=½||Ax-b||²,                   h(x)=alpha1||x||₁
+      - ridge:       g(x)=½||Ax-b||² + ½ alpha2||x||²,   h(x)=0
+      - elasticnet:  g(x)=½||Ax-b||² + ½ alpha2||x||²,   h(x)=alpha1||x||₁
+ 
+    reg_type: one of "lasso", "ridge", "elasticnet"
+    alpha1, alpha2: non-negative regularization weights
     """
-    m, n = A.shape
-    x = np.zeros(n)
-    y = x.copy()
-    t = 1.0
-    L = estimate_lipschitz(A)
+    # ————————————————————————————————
+    # 1) Scegli i coefficienti effettivi
+    if reg_type == "lasso":
+        α1, α2 = alpha1,    0.0
+    elif reg_type == "ridge":
+        α1, α2 = 0.0,       alpha2
+    elif reg_type == "elasticnet":
+        α1, α2 = alpha1,    alpha2
+    else:
+        raise ValueError(f"Unsupported reg_type='{reg_type}'")
+ 
+    # ————————————————————————————————
+    # 2) Inizializzazione
+    n       = A.shape[1]
+    x_k     = np.zeros(n)
+    y_k     = x_k.copy()
+    t_tilde = 1.0
+ 
+    # Lipschitz of ∇g = AᵀA + α2 I
+    L_A     = np.linalg.norm(A, ord=2)**2
+    L       = L_A + α2
+    τ       = 1.0 / L
+ 
     objs = []
     if return_history:
-        steps, ratios, xs = [], [], [x.copy()]
-    x_prev = x.copy()
-
+        step_norms = []
+        ratio_vals = []
+        x_hist     = [x_k.copy()]
+ 
+    x_prev = x_k.copy()
+ 
+    # ————————————————————————————————
+    # 3) Ciclo FISTA
     for k in range(max_iter):
-        grad = A.T @ (A @ y - b)
-        v = y - grad / L
-        # prox step for chosen regularizer
-        if reg_type == 'lasso':
-            x_new = prox_l1(v, alpha1 / L)
-        else:
-            x_new = prox_elastic_net(v, 1.0 / L, alpha1, alpha2)
-        # compute step norm
-        delta = np.linalg.norm(x_new - x)
+        # 3.1) grad step su g: ∇g(y_k) = Aᵀ(Ay_k - b) + α2 y_k
+        grad = A.T @ (A @ y_k - b) + α2 * y_k
+        v    = y_k - τ * grad
+ 
+        # 3.2) prox‐step su h = α1||·||₁
+        x_next = prox_l1(v, τ * α1)
+ 
+        # 3.3) misura progresso
+        delta = np.linalg.norm(x_next - x_k)
         if return_history:
-            prev_delta = np.linalg.norm(x - x_prev) if k > 0 else 0.0
-            ratio = delta / prev_delta if prev_delta > 0 else 0.0
-        # adaptive restart logic
+            prev_delta = np.linalg.norm(x_k - x_prev) if k>0 else 0.0
+            ratio      = delta / prev_delta if prev_delta>0 else 0.0
+ 
+        # 3.4) adaptive‐restart o update del fattore t̃
         if adaptive_restart and return_history and ratio > restart_threshold:
-            t_new = 1.0
-            y = x_new.copy()
+            t_tilde_new = 1.0
+            y_k         = x_next.copy()
         else:
-            t_new = 0.5 * (1 + np.sqrt(1 + 4 * t * t))
-            y = x_new + ((t - 1) / t_new) * (x_new - x)
-        x_prev = x.copy()
-        x, t = x_new, t_new
-        objs.append(compute_objective(x, A, b, reg_type, alpha1, alpha2))
+            t_tilde_new = 0.5 * (1 + np.sqrt(1 + 4 * t_tilde**2))
+            beta        = (t_tilde - 1) / t_tilde_new
+            y_k         = x_next + beta * (x_next - x_k)
+ 
+        # 3.5) aggiorna stato
+        x_prev, x_k, t_tilde = x_k.copy(), x_next, t_tilde_new
+ 
+        # 3.6) calcola f(x_k) = g + h
+        r = A @ x_k - b
+        g = 0.5 * r.dot(r) + 0.5 * α2 * x_k.dot(x_k)
+        h = α1 * np.linalg.norm(x_k, 1)
+        objs.append(g + h)
+ 
         if return_history:
-            steps.append(delta)
-            ratios.append(ratio)
-            xs.append(x.copy())
+            step_norms.append(delta)
+            ratio_vals.append(ratio)
+            x_hist.append(x_k.copy())
+ 
+        # 3.7) stopping
         if tol > 0.0 and delta < tol:
             break
-
+ 
+    # ————————————————————————————————
+    # 4) return
     if return_history:
-        return x, objs, steps, ratios, xs
-    return x, objs
+        return x_k, objs, step_norms, ratio_vals, x_hist
+    return x_k, objs
 
 # --- FISTA-Delta: Variant with fixed inertial parameter ---
 def fista_delta(

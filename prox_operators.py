@@ -9,8 +9,8 @@ def prox_l1(v, tau):
 
 def prox_elastic_net(v, tau, alpha1, alpha2):
     """
-    Proximal operator for Elastic-Net:
-      prox = soft_threshold(v, τ·α1) / (1 + 2τ·α2)
+    Elastic-Net prox for h(x)=alpha1||x||1 + 0.5*alpha2||x||2^2:
+      prox = 1/(1 + tau*alpha2) * prox_{tau*alpha1||·||1}(v)
     """
     s = prox_l1(v, tau * alpha1)
-    return s / (1 + 2 * tau * alpha2)
+    return s / (1 + tau * alpha2)
