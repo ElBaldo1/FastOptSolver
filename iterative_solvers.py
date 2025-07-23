@@ -2,6 +2,7 @@ from __future__ import annotations
 import numpy as np
 from objective_functions import compute_objective
 from prox_operators import prox_l1, prox_elastic_net
+from typing import Callable
 
 # ---------------------------------------------------------------------
 # Estimate Lipschitz constant L = λ_max(AᵀA)
