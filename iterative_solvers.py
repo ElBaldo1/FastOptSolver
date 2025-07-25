@@ -78,10 +78,10 @@ def ista(
             log["delta"].append(delta)
 
     return (x, log) if return_history else x
+# ---------------------------------------------------------------------
+# FISTA: Accelerated Proximal Gradient with optional restart & profiling
+# ---------------------------------------------------------------------
 
-# ---------------------------------------------------------------------
-# FISTA: Accelerated Proximal Gradient with optional restart
-# ---------------------------------------------------------------------
 def fista(
     A: np.ndarray,
     b: np.ndarray,
@@ -95,75 +95,86 @@ def fista(
     return_history: bool = False,
 ) -> tuple[np.ndarray, dict] | np.ndarray:
     """
-    FISTA for lasso, ridge, elastic-net:
-      - gradient step includes ridge term if alpha2>0
-      - prox step applies soft-thresholding with alpha1
-      - optional adaptive restart
-    Note: alpha1 and alpha2 should be pre-adjusted (small values set to zero) externally.
+    FISTA for lasso, ridge, elastic-net with timing & memory profiling:
+      - Measures time & memory of gradient and prox steps
     """
     n = A.shape[1]
     x_k = np.zeros(n)
     y_k = x_k.copy()
     t_tilde = 1.0
     L_val = np.linalg.norm(A, ord=2)**2 + alpha2
-    τ = 1.0 / L_val
+    tau = 1.0 / L_val
 
-    log = {"x": [x_k.copy()], "delta": [], "ratio": [], "obj": []} if return_history else None
+    history = {
+        'x': [x_k.copy()],
+        'obj': [],
+        'grad_time': [],
+        'prox_time': [],
+        'grad_mem': [],
+        'prox_mem': []
+    } if return_history else None
     x_prev = x_k.copy()
 
     for k in range(max_iter):
+        # gradient step profiling
+        tracemalloc.start()
+        t0g = time.perf_counter()
         grad = A.T @ (A @ y_k - b)
         if alpha2 > 0:
             grad += alpha2 * y_k
-        if tol > 0.0 and np.linalg.norm(grad) < tol:
-            break
+        t1g = time.perf_counter()
+        gcur, gpeak = tracemalloc.get_traced_memory()
+        tracemalloc.stop()
 
-        v = y_k - τ * grad
-        x_next = prox_l1(v, τ * alpha1) if alpha1 > 0 else v
+        # extrapolate
+        v = y_k - tau * grad
 
+        # prox step profiling
+        tracemalloc.start()
+        t0p = time.perf_counter()
+        if prox_is_closed_form(reg_type, alpha1, alpha2):
+            x_next = prox_l1(v, tau * alpha1)
+        else:
+            x_next = prox_via_lbfgs(v, tau, reg_type, alpha1, alpha2)
+        t1p = time.perf_counter()
+        pcur, ppeak = tracemalloc.get_traced_memory()
+        tracemalloc.stop()
+
+        if return_history:
+            history['grad_time'].append(t1g - t0g)
+            history['grad_mem'].append((gcur, gpeak))
+            history['prox_time'].append(t1p - t0p)
+            history['prox_mem'].append((pcur, ppeak))
+
+        # momentum & restart logic
         delta = np.linalg.norm(x_next - x_k)
-        prev_delta = np.linalg.norm(x_k - x_prev) if k > 0 else 0.0
-        ratio = delta / prev_delta if prev_delta > 0 else 0.0
+        prev_delta = np.linalg.norm(x_k - x_prev) if k>0 else 0.0
+        ratio = delta/prev_delta if prev_delta>0 else 0.0
         ip = (y_k - x_next).dot(x_next - x_k)
-
         restart = adaptive_restart and ((ratio > restart_threshold) or (ip > 0))
         if restart:
             t_next = 1.0
             y_next = x_next.copy()
         else:
-            t_next = 0.5 * (1 + np.sqrt(1 + 4 * t_tilde**2))
-            beta = (t_tilde - 1) / t_next
-            y_next = x_next + beta * (x_next - x_k)
+            t_next = 0.5*(1+np.sqrt(1+4*t_tilde**2))
+            beta = (t_tilde-1)/t_next
+            y_next = x_next + beta*(x_next - x_k)
 
+        # compute objective
         r = A @ x_next - b
-        obj = 0.5 * r.dot(r)
-        if alpha2 > 0:
-            obj += 0.5 * alpha2 * x_next.dot(x_next)
-        if alpha1 > 0:
-            obj += alpha1 * np.linalg.norm(x_next, 1)
+        obj = 0.5*r.dot(r)
+        if alpha2>0: obj += 0.5*alpha2*x_next.dot(x_next)
+        if alpha1>0: obj += alpha1*np.linalg.norm(x_next,1)
+        if return_history:
+            history['x'].append(x_next.copy())
+            history['obj'].append(obj)
 
-        if k > 0 and tol > 0.0:
-            rel = abs(obj - log["obj"][-1]) / max(1.0, abs(log["obj"][-1]))
-            if rel < tol:
-                if log:
-                    log["obj"].append(obj)
-                    log["delta"].append(delta)
-                    log["ratio"].append(ratio)
-                    log["x"].append(x_next.copy())
-                break
-
-        if log:
-            log["obj"].append(obj)
-            log["delta"].append(delta)
-            log["ratio"].append(ratio)
-            log["x"].append(x_next.copy())
-
-        x_prev, x_k, y_k, t_tilde = x_k, x_next, y_next, t_next
-        if tol > 0.0 and delta < tol:
+        if tol>0 and delta<tol:
             break
 
-    return (x_k, log) if return_history else x_k
+        x_prev, x_k, y_k, t_tilde = x_k, x_next, y_next, t_next
 
+    return (x_k, history) if return_history else x_k
 # ---------------------------------------------------------------------
 # FISTA-Δ: fixed momentum θ_k = k/(k+1+δ)
 # ---------------------------------------------------------------------
@@ -203,3 +214,113 @@ def fista_delta(
             break
 
     return x_k, objs
+
+
+import time
+import tracemalloc
+from prox_generic import prox_via_lbfgs, prox_is_closed_form
+from prox_operators import prox_l1
+# ---------------------------------------------------------------------
+# FISTA Hybrid L-BFGS: Instrumented for timing and memory profiling
+# ---------------------------------------------------------------------
+def fista_hybrid_l_bfgs(
+    A: np.ndarray,
+    b: np.ndarray,
+    reg_type: str,
+    alpha1: float,
+    alpha2: float,
+    max_iter: int = 500,
+    tol: float = 0.0,
+    adaptive_restart: bool = False,
+    restart_threshold: float = 1.0,
+    return_history: bool = False,
+) -> tuple[np.ndarray, dict] | np.ndarray:
+    """
+    FISTA Hybrid L-BFGS with timing and memory metrics:
+      Measures time and memory usage for gradient step and proximal step.
+
+    Returns history including:
+      - 'grad_time', 'prox_time'
+      - 'grad_mem',  'prox_mem'
+    """
+    n = A.shape[1]
+    x_k = np.zeros(n)
+    y_k = x_k.copy()
+    t_tilde = 1.0
+    L_val = np.linalg.norm(A, ord=2)**2 + alpha2
+    tau = 1.0 / L_val
+
+    history = {
+        'x': [x_k.copy()],
+        'obj': [],
+        'grad_time': [],
+        'prox_time': [],
+        'grad_mem': [],
+        'prox_mem': []
+    } if return_history else None
+    x_prev = x_k.copy()
+
+    for k in range(max_iter):
+        # Measure gradient step
+        tracemalloc.start()
+        t0_grad = time.perf_counter()
+        grad = A.T @ (A @ y_k - b)
+        if alpha2 > 0:
+            grad += alpha2 * y_k
+        t1_grad = time.perf_counter()
+        cur_mem_grad, peak_mem_grad = tracemalloc.get_traced_memory()
+        tracemalloc.stop()
+
+        # Extrapolation
+        v = y_k - tau * grad
+
+        # Measure proximal step
+        tracemalloc.start()
+        t0_prox = time.perf_counter()
+        if prox_is_closed_form(reg_type, alpha1, alpha2):
+            x_next = prox_l1(v, tau * alpha1)
+        else:
+            x_next = prox_via_lbfgs(v, tau, reg_type, alpha1, alpha2)
+        t1_prox = time.perf_counter()
+        cur_mem_prox, peak_mem_prox = tracemalloc.get_traced_memory()
+        tracemalloc.stop()
+
+        # Record metrics
+        if return_history:
+            history['grad_time'].append(t1_grad - t0_grad)
+            history['grad_mem'].append((cur_mem_grad, peak_mem_grad))
+            history['prox_time'].append(t1_prox - t0_prox)
+            history['prox_mem'].append((cur_mem_prox, peak_mem_prox))
+
+        # Momentum & restart
+        delta = np.linalg.norm(x_next - x_k)
+        prev_delta = np.linalg.norm(x_k - x_prev) if k > 0 else 0.0
+        ratio = delta / prev_delta if prev_delta > 0 else 0.0
+        ip = (y_k - x_next).dot(x_next - x_k)
+        restart = adaptive_restart and ((ratio > restart_threshold) or (ip > 0))
+        if restart:
+            t_next = 1.0
+            y_next = x_next.copy()
+        else:
+            t_next = 0.5 * (1 + np.sqrt(1 + 4 * t_tilde**2))
+            beta = (t_tilde - 1) / t_next
+            y_next = x_next + beta * (x_next - x_k)
+
+        # Compute objective
+        r = A @ x_next - b
+        obj = 0.5 * r.dot(r)
+        if alpha2 > 0:
+            obj += 0.5 * alpha2 * x_next.dot(x_next)
+        if alpha1 > 0:
+            obj += alpha1 * np.linalg.norm(x_next, 1)
+        if return_history:
+            history['x'].append(x_next.copy())
+            history['obj'].append(obj)
+
+        # Convergence check
+        if tol > 0 and delta < tol:
+            break
+
+        x_prev, x_k, y_k, t_tilde = x_k, x_next, y_next, t_next
+
+    return (x_k, history) if return_history else x_k
