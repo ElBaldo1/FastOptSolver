@@ -1,6 +1,7 @@
 import numpy as np
 from scipy.optimize import fmin_l_bfgs_b
 from objective_functions import compute_objective
+import time
 
 class LBFGSSolver:
     """L-BFGS for Ridge and smooth Elastic-Net, with tiny-α shortcut."""
@@ -38,13 +39,16 @@ class LBFGSSolver:
 
     def fit(self, A, b):
         def fg(x):
-            r = A @ x - b
+            t0 = time.perf_counter()
+            # === inizio calcolo originale ===
+            r    = A @ x - b
             loss = 0.5 * r.dot(r)
             grad = A.T @ r
-            # add ridge penalty if needed
             if self.reg_type in ("ridge", "elasticnet"):
                 loss += self.alpha2 * x.dot(x)
                 grad += 2 * self.alpha2 * x
+            # === fine calcolo originale ===
+            grad_call_times.append(time.perf_counter() - t0)
             return loss, grad
 
         def callback(xk):
