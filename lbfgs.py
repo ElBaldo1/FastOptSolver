@@ -2,6 +2,7 @@ import numpy as np
 from scipy.optimize import fmin_l_bfgs_b
 from objective_functions import compute_objective
 import time
+from iterative_solvers import grad_call_times
 
 class LBFGSSolver:
     """L-BFGS for Ridge and smooth Elastic-Net, with tiny-α shortcut."""
@@ -39,15 +40,15 @@ class LBFGSSolver:
 
     def fit(self, A, b):
         def fg(x):
+            # 1) time the smooth-part gradient exactly like in ISTA/FISTA
             t0 = time.perf_counter()
-            # === inizio calcolo originale ===
             r    = A @ x - b
             loss = 0.5 * r.dot(r)
             grad = A.T @ r
             if self.reg_type in ("ridge", "elasticnet"):
                 loss += self.alpha2 * x.dot(x)
                 grad += 2 * self.alpha2 * x
-            # === fine calcolo originale ===
+            # 2) record the gradient timing
             grad_call_times.append(time.perf_counter() - t0)
             return loss, grad
 
