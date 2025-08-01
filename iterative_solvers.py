@@ -131,7 +131,9 @@ def ista(
     return (x, log) if return_history else x
 
 # ---------------------------------------------------------------------
-# FISTA: Accelerated Proximal Gradient with optional backtracking & timing
+# FISTA: Accelerated Proximal Gradient with optional backtracking,
+#        adaptive restart, and stopping on gradient norm, step norm,
+#        or step‐ratio norm.
 # ---------------------------------------------------------------------
 def fista(
     A: np.ndarray,
@@ -139,37 +141,43 @@ def fista(
     reg_type: str,
     alpha1: float,
     alpha2: float,
-    backtracking: bool = False,
-    eta: float = 0.5,
-    max_iter: int = 500,
-    tol: float = 0.0,
-    adaptive_restart: bool = False,
-    restart_threshold: float = 1.0,
-    return_history: bool = False,
+    backtracking: bool        = False,
+    eta: float                = 0.5,
+    max_iter: int             = 500,
+    tol: float                = 0.0,
+    tol_ratio: float          = 0.0,
+    adaptive_restart: bool    = False,
+    restart_threshold: float  = 1.0,
+    return_history: bool      = False,
 ) -> tuple[np.ndarray, dict] | np.ndarray:
     """
     FISTA for lasso, ridge, elastic-net:
-      1) Compute gradient ∇g(y_k) = Aᵀ (A y_k – b) + α₂ y_k
-      2) (optionally) Backtracking line-search on smooth part g
-      3) Proximal step: x_next = prox_l1(y_k – τ ∇g, τ * α₁)
-      4) Nesterov momentum update (with optional adaptive restart)
-      5) Stop when gradient norm or step norm < tol
+      1) Compute gradient ∇g(y_k) = Aᵀ(A y_k – b) + α₂ y_k
+      2) Optionally backtracking line-search on g_smooth
+      3) Proximal step: x_next = prox_l1(y_k – τ∇g, τ*α₁)
+      4) Nesterov momentum update with optional adaptive restart
+      5) Stop when any of:
+           - ∥grad∥ < tol
+           - ∥x^{k+1}-x^k∥ < tol
+           - ∥x^{k+1}-x^k∥/∥x^k-x^{k-1}∥ < tol_ratio
     Timing:
-      - Records each gradient evaluation duration in grad_call_times
-      - Records each line-search duration in ls_call_times and iteration count in ls_call_iters
+      - Records gradient durations in grad_call_times
+      - Records line-search durations in ls_call_times and iterations in ls_call_iters
     """
-    n       = A.shape[1]
-    x_k     = np.zeros(n)
-    y_k     = x_k.copy()
-    t_prev  = 1.0
-    L_val   = np.linalg.norm(A, 2)**2 + alpha2
-    tau     = 1.0 / L_val
+    n      = A.shape[1]
+    x_k    = np.zeros(n)
+    y_k    = x_k.copy()
+    t_prev = 1.0
+
+    # Lipschitz L = ∥A∥² + α₂
+    L_val = np.linalg.norm(A, 2)**2 + alpha2
+    tau   = 1.0 / L_val
 
     history = {"x": [x_k.copy()], "obj": []} if return_history else None
     x_prev  = x_k.copy()
 
-    # helper for smooth part g(y) = 0.5||Ay - b||² + (α₂/2)||y||²
     def g_smooth(z: np.ndarray) -> float:
+        """Smooth part g(z) = ½∥Az - b∥² + (α₂/2)∥z∥²."""
         r = A @ z - b
         val = 0.5 * r.dot(r)
         if alpha2 > 0:
@@ -184,11 +192,11 @@ def fista(
             grad += alpha2 * y_k
         grad_call_times.append(time.perf_counter() - t0)
 
-        # 2) stopping criterion on gradient norm
+        # 2) stopping on gradient norm
         if tol > 0.0 and np.linalg.norm(grad) < tol:
             break
 
-        # 3) optionally backtrack + record line-search timing & iterations
+        # 3) optional backtracking line-search
         if backtracking:
             bt_steps = 0
             ls_t0    = time.perf_counter()
@@ -197,12 +205,10 @@ def fista(
                 v_tmp = y_k - t_k * grad
                 x_tmp = prox_l1(v_tmp, t_k * alpha1) if alpha1 > 0 else v_tmp
                 diff  = x_tmp - y_k
-                # Armijo condition on smooth part
-                if g_smooth(x_tmp) <= g_smooth(y_k) + grad.dot(diff) + np.linalg.norm(diff)**2 / (2*t_k):
+                if g_smooth(x_tmp) <= g_smooth(y_k) + grad.dot(diff) + np.linalg.norm(diff)**2/(2*t_k):
                     break
-                t_k    *= eta
+                t_k *= eta
                 bt_steps += 1
-            # record line-search stats
             ls_call_times.append(time.perf_counter() - ls_t0)
             ls_call_iters.append(bt_steps)
             tau = t_k
@@ -211,24 +217,27 @@ def fista(
         v      = y_k - tau * grad
         x_next = prox_l1(v, tau * alpha1) if alpha1 > 0 else v
 
-        # 5) momentum (with optional adaptive restart)
+        # 5) compute step‐norm and ratio
+        this_step = np.linalg.norm(x_next - x_k)
+        prev_step = np.linalg.norm(x_k     - x_prev)
+        ratio     = this_step / prev_step if prev_step > 0 else np.inf
+
+        # 6) adaptive restart if requested
         if adaptive_restart:
-            prev_step = np.linalg.norm(x_k - x_prev) if k > 0 else 0.0
-            this_step = np.linalg.norm(x_next - x_k)
-            ratio     = this_step / prev_step if prev_step > 0 else 0.0
             if ratio > restart_threshold:
+                # reset momentum
                 t_curr = 1.0
                 y_next = x_next.copy()
             else:
-                t_curr = 0.5 * (1 + np.sqrt(1 + 4 * t_prev**2))
+                t_curr = 0.5 * (1 + np.sqrt(1 + 4*t_prev**2))
                 beta   = (t_prev - 1) / t_curr
                 y_next = x_next + beta * (x_next - x_k)
         else:
-            t_curr = 0.5 * (1 + np.sqrt(1 + 4 * t_prev**2))
+            t_curr = 0.5 * (1 + np.sqrt(1 + 4*t_prev**2))
             beta   = (t_prev - 1) / t_curr
             y_next = x_next + beta * (x_next - x_k)
 
-        # 6) record objective if requested
+        # 7) record objective if requested
         if return_history:
             r   = A @ x_next - b
             obj = 0.5 * r.dot(r)
@@ -239,18 +248,22 @@ def fista(
             history["obj"].append(obj)
             history["x"].append(x_next.copy())
 
-        # 7) prepare for next iteration
+        # 8) update iterate history
         x_prev, x_k, y_k, t_prev = x_k, x_next, y_next, t_curr
 
-        # 8) stopping criterion on step norm
-        if tol > 0.0 and np.linalg.norm(x_k - x_prev) < tol:
+        # 9) stopping on step‐norm
+        if tol > 0.0 and this_step < tol:
+            break
+
+        # 10) stopping on step‐ratio
+        if tol_ratio > 0.0 and ratio < tol_ratio:
             break
 
     return (x_k, history) if return_history else x_k
 
 
 # ---------------------------------------------------------------------
-# FISTA-Δ: fixed momentum θ_k = k/(k+1+δ) with optional backtracking & timing
+# FISTA-Δ: fixed momentum θ_k = k/(k+1+δ), same stopping options
 # ---------------------------------------------------------------------
 def fista_delta(
     A: np.ndarray,
@@ -259,89 +272,98 @@ def fista_delta(
     alpha1: float,
     alpha2: float,
     delta: float,
-    backtracking: bool = False,
-    eta: float = 0.5,
-    max_iter: int = 500,
-    tol: float = 0.0,
-    return_history: bool = False,
+    backtracking: bool     = False,
+    eta: float             = 0.5,
+    max_iter: int          = 500,
+    tol: float             = 0.0,
+    tol_ratio: float       = 0.0,
+    return_history: bool   = False,
 ) -> tuple[np.ndarray, dict] | np.ndarray:
     """
-    FISTA-Δ (fixed momentum) solver for Lasso/Ridge/Elastic-Net:
-      θ_k = k / (k + 1 + δ)
-      1) Compute gradient ∇g(yₖ) = Aᵀ(A yₖ − b) + 2 α₂ yₖ (if elastic-net)
-      2) (optionally) Backtracking line-search on smooth part g
-      3) Proximal step: x_next = prox_l1(yₖ − τ ∇g, τ * α₁)
-      4) Momentum update: yₖ₊₁ = x_next + θₖ (x_next − xₖ)
-      5) Stop when ∥x_next − xₖ∥ < tol
-    Timing:
-      - Records gradient evaluation durations in grad_call_times
-      - Records line-search durations in ls_call_times and iteration counts in ls_call_iters
+    FISTA-Δ solver with fixed θ_k = k/(k+1+δ):
+      1) ∇g(y_k) = Aᵀ(A y_k – b) + 2α₂ y_k (if elastic-net)
+      2) Optional backtracking on g_smooth
+      3) Proximal x_next = prox_l1(y_k – τ∇g, τ*α₁)
+      4) Momentum y_{k+1} = x_next + θ_k (x_next – x_k)
+      5) Stop when any of:
+           - ∥x_next – x_k∥ < tol
+           - ∥x_next – x_k∥/∥x_k – x_{k-1}∥ < tol_ratio
+    Timing stats as above.
     """
     m, n = A.shape
-    x_k = np.zeros(n)
-    y_k = x_k.copy()
-    # Estimate Lipschitz constant: λ_max(AᵀA) + 2*alpha2 (for elastic-net)
+    x_k  = np.zeros(n)
+    y_k  = x_k.copy()
+
+    # Lipschitz estimate λ_max(AᵀA) + 2α₂
     L_val = estimate_lipschitz(A)
     if reg_type == 'elasticnet' and alpha2 > 0:
-        L_val += 2 * alpha2
-    τ = 1.0 / L_val
+        L_val += 2*alpha2
+    tau = 1.0 / L_val
 
     history = {"x": [], "obj": []} if return_history else None
+    x_prev = x_k.copy()
 
-    # helper for smooth part g(y)
     def g_smooth(z: np.ndarray) -> float:
+        """Smooth part for FISTA-Δ."""
         r = A @ z - b
         val = 0.5 * r.dot(r)
         if alpha2 > 0:
             val += 0.5 * alpha2 * z.dot(z)
         return val
 
-    for k in range(1, max_iter + 1):
-        # 1) timed gradient evaluation
+    for k in range(1, max_iter+1):
+        # 1) timed gradient
         t0 = time.perf_counter()
         grad = A.T @ (A @ y_k - b)
         if reg_type == 'elasticnet' and alpha2 > 0:
-            grad += 2 * alpha2 * y_k
+            grad += 2*alpha2 * y_k
         grad_call_times.append(time.perf_counter() - t0)
 
-        # 2) optionally backtrack + record line-search timing & iterations
+        # 2) backtracking if desired
         if backtracking:
             bt_steps = 0
             ls_t0    = time.perf_counter()
-            τ_k      = τ
+            tau_k    = tau
             while True:
-                v_tmp = y_k - τ_k * grad
-                x_tmp = prox_l1(v_tmp, τ_k * alpha1) if alpha1 > 0 else v_tmp
+                v_tmp = y_k - tau_k * grad
+                x_tmp = prox_l1(v_tmp, tau_k * alpha1) if alpha1>0 else v_tmp
                 diff  = x_tmp - y_k
-                if g_smooth(x_tmp) <= g_smooth(y_k) + grad.dot(diff) + np.linalg.norm(diff)**2 / (2*τ_k):
+                if g_smooth(x_tmp) <= g_smooth(y_k) + grad.dot(diff) + np.linalg.norm(diff)**2/(2*tau_k):
                     break
-                τ_k    *= eta
+                tau_k *= eta
                 bt_steps += 1
-            # record line-search stats
             ls_call_times.append(time.perf_counter() - ls_t0)
             ls_call_iters.append(bt_steps)
-            τ = τ_k
+            tau = tau_k
 
         # 3) proximal update
-        v      = y_k - τ * grad
-        x_next = prox_l1(v, τ * alpha1) if alpha1 > 0 else v
+        v      = y_k - tau * grad
+        x_next = prox_l1(v, tau * alpha1) if alpha1 > 0 else v
 
-        # 4) record history if requested
+        # 4) record history
         if return_history:
             history["x"].append(x_next.copy())
             obj = compute_objective(x_next, A, b, reg_type, alpha1, alpha2)
             history["obj"].append(obj)
 
-        # 5) momentum update θₖ = k/(k+1+δ)
+        # 5) compute step & ratio
+        this_step = np.linalg.norm(x_next - x_k)
+        prev_step = np.linalg.norm(x_k     - x_prev)
+        ratio     = this_step / prev_step if prev_step > 0 else np.inf
+
+        # 6) momentum update θ_k = k/(k+1+δ)
         theta = k / (k + 1 + delta)
         y_k   = x_next + theta * (x_next - x_k)
 
-        # 6) prepare for next iteration
-        step_norm = np.linalg.norm(x_next - x_k)
-        x_k       = x_next
+        # 7) prepare next
+        x_prev, x_k = x_k, x_next
 
-        # 7) check stopping criterion
-        if tol > 0.0 and step_norm < tol:
+        # 8) stopping on step norm
+        if tol > 0.0 and this_step < tol:
+            break
+
+        # 9) stopping on step ratio
+        if tol_ratio > 0.0 and ratio < tol_ratio:
             break
 
     return (x_k, history) if return_history else x_k
