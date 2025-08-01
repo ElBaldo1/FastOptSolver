@@ -155,19 +155,7 @@ def ista(
 # ---------------------------------------------------------------------
 # FISTA: Accelerated Proximal with selectable step-size
 # ---------------------------------------------------------------------
-def fista(
-    A: np.ndarray,
-    b: np.ndarray,
-    reg_type: str,
-    alpha1: float,
-    alpha2: float,
-    step_method: str = "fixed",   # 'fixed' or 'armijo'
-    max_iter: int = 500,
-    tol: float = 0.0,
-    adaptive_restart: bool = False,
-    restart_threshold: float = 1.0,
-    return_history: bool = False
-) -> tuple[np.ndarray, dict] | np.ndarray:
+def fista(A, b, reg_type, alpha1, alpha2, step_method="fixed", max_iter=500, tol=0.0, adaptive_restart=False, restart_threshold=1.0, return_history=False):
     n = A.shape[1]
     x_k = np.zeros(n)
     y_k = x_k.copy()
@@ -176,25 +164,23 @@ def fista(
     tau_fixed = 1.0 / L_val
     history = {"x": [x_k.copy()], "obj": [], "delta": []} if return_history else None
 
-    def g_s(z: np.ndarray) -> float:
+    def g_s(z):
         r = A @ z - b
         val = 0.5 * r.dot(r)
         if alpha2 > 0:
             val += 0.5 * alpha2 * z.dot(z)
         return val
 
-    def grad_s(z: np.ndarray) -> np.ndarray:
+    def grad_s(z):
         g = A.T @ (A @ z - b)
         return g + (alpha2 * z if alpha2 > 0 else 0)
 
+    x_prev = None  # initialize only after first iter
+
     for k in range(max_iter):
-        # gradient
         t0 = time.perf_counter()
         grad = grad_s(y_k)
         grad_call_times.append(time.perf_counter() - t0)
-        if tol > 0 and np.linalg.norm(grad) < tol:
-            break
-        # select tau
         d = -grad
         if step_method == 'armijo':
             ls_t0 = time.perf_counter()
@@ -203,82 +189,90 @@ def fista(
             ls_call_iters.append(iters)
         else:
             tau = tau_fixed
-        # prox
         v = y_k + tau*d
-        x_next = prox_l1(v, tau*alpha1) if alpha1>0 else v
+        x_next = prox_l1(v, tau*alpha1) if alpha1 > 0 else v
+
         delta = np.linalg.norm(x_next - x_k)
-        # restart/momentum
-        if adaptive_restart and return_history and k>0 and delta > history['delta'][-1]:
+
+        if adaptive_restart and return_history and k > 0 and delta > history['delta'][-1]:
             t_curr = 1.0
             y_k = x_next.copy()
         else:
-            t_curr = 0.5*(1+np.sqrt(1+4*t_prev**2))
-            beta   = (t_prev-1)/t_curr
-            y_k    = x_next + beta*(x_next-x_k)
-        # record
+            t_curr = 0.5*(1 + np.sqrt(1 + 4*t_prev**2))
+            beta = (t_prev - 1) / t_curr
+            y_k = x_next + beta * (x_next - x_k)
+
         if return_history:
             history['x'].append(x_next.copy())
-            history['obj'].append(compute_objective(x_next,A,b,reg_type,alpha1,alpha2))
+            history['obj'].append(compute_objective(x_next, A, b, reg_type, alpha1, alpha2))
             history['delta'].append(delta)
+
         # prepare next
+        if tol > 0 and x_prev is not None:
+            num = np.linalg.norm(x_next - x_k)
+            den = np.linalg.norm(x_k - x_prev)
+            if den > 1e-12 and num / den < tol:
+                break
+
+        x_prev = x_k.copy()
         x_k, t_prev = x_next, t_curr
-        if tol>0 and delta<tol:
-            break
 
     return (x_k, history) if return_history else x_k
 
 # ---------------------------------------------------------------------
 # FISTA-Δ: fixed momentum θ_k = k/(k+1+δ) with selectable step-size
 # ---------------------------------------------------------------------
-def fista_delta(
-    A: np.ndarray,
-    b: np.ndarray,
-    reg_type: str,
-    alpha1: float,
-    alpha2: float,
-    delta: float,
-    step_method: str = "fixed",   # 'fixed' or 'armijo'
-    max_iter: int = 500,
-    tol: float = 0.0,
-    return_history: bool = False
-) -> tuple[np.ndarray, dict] | np.ndarray:
-    m,n = A.shape
+def fista_delta(A, b, reg_type, alpha1, alpha2, delta, step_method="fixed", max_iter=500, tol=0.0, return_history=False):
+    m, n = A.shape
     x_k = np.zeros(n)
     y_k = x_k.copy()
-    L_val = estimate_lipschitz(A) + (2*alpha2 if alpha2>0 else 0)
+    x_prev = None
+    L_val = estimate_lipschitz(A) + (2 * alpha2 if alpha2 > 0 else 0)
     tau_fixed = 1.0 / L_val
     history = {"x": [], "obj": []} if return_history else None
 
-    def g_s(z: np.ndarray) -> float:
+    def g_s(z):
         r = A @ z - b
-        val = 0.5*r.dot(r)
-        if alpha2>0: val += 0.5*alpha2*z.dot(z)
+        val = 0.5 * r.dot(r)
+        if alpha2 > 0:
+            val += 0.5 * alpha2 * z.dot(z)
         return val
 
-    for k in range(1, max_iter+1):
+    for k in range(1, max_iter + 1):
         t0 = time.perf_counter()
-        grad = A.T@(A@y_k - b) + (2*alpha2*y_k if alpha2>0 else 0)
+        grad = A.T @ (A @ y_k - b) + (2 * alpha2 * y_k if alpha2 > 0 else 0)
         grad_call_times.append(time.perf_counter() - t0)
-        # step-size
         d = -grad
-        if step_method=='armijo':
+        if step_method == 'armijo':
             ls_t0 = time.perf_counter()
-            tau, iters = armijo_line_search(g_s, lambda z: A.T@(A@z-b)+(2*alpha2*z if alpha2>0 else 0), y_k, d, tau_fixed)
-            ls_call_times.append(time.perf_counter()-ls_t0)
+            tau, iters = armijo_line_search(
+                g_s,
+                lambda z: A.T @ (A @ z - b) + (2 * alpha2 * z if alpha2 > 0 else 0),
+                y_k,
+                d,
+                tau_fixed
+            )
+            ls_call_times.append(time.perf_counter() - ls_t0)
             ls_call_iters.append(iters)
         else:
             tau = tau_fixed
-        # prox & momentum
-        v = y_k + tau*d
-        x_next = prox_l1(v, tau*alpha1) if alpha1>0 else v
+
+        v = y_k + tau * d
+        x_next = prox_l1(v, tau * alpha1) if alpha1 > 0 else v
+
         if return_history:
             history['x'].append(x_next.copy())
             history['obj'].append(compute_objective(x_next, A, b, reg_type, alpha1, alpha2))
-        theta = k/(k+1+delta)
-        y_k = x_next + theta*(x_next - x_k)
-        step_norm = np.linalg.norm(x_next - x_k)
+
+        if tol > 0 and x_prev is not None:
+            num = np.linalg.norm(x_next - x_k)
+            den = np.linalg.norm(x_k - x_prev)
+            if den > 1e-12 and num / den < tol:
+                break
+
+        theta = k / (k + 1 + delta)
+        y_k = x_next + theta * (x_next - x_k)
+        x_prev = x_k.copy()
         x_k = x_next
-        if tol>0 and step_norm<tol:
-            break
 
     return (x_k, history) if return_history else x_k
