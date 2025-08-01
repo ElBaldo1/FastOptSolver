@@ -1,4 +1,5 @@
 import numpy as np
+# the following line use backtracking with armjio e wolf condition e perchè per matrice hessiana
 from scipy.optimize import fmin_l_bfgs_b
 from objective_functions import compute_objective
 import time
