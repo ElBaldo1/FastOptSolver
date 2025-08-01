@@ -5,7 +5,7 @@ import numpy as np
 # ---------------------------------------------------------------------
 
 def generate_correlated_boston_like_data(
-    m: int = 2000,
+    m: int = 1000,
     seed: int = 42,
     noise_std: float = 2.0,
     rho1: float = 0.8,    # correlation for block1,
