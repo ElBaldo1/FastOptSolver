@@ -6,6 +6,11 @@ from prox_operators import prox_l1, prox_elastic_net
 from typing import Callable
 
 # ---------------------------------------------------------------------
+# GLOBAL ARMIJO PARAMETER
+# ---------------------------------------------------------------------
+C: float = 1e-2  # sufficient decrease parameter for Armijo condition
+
+# ---------------------------------------------------------------------
 # METRICS INFRASTRUCTURE FOR ISTA TIMING
 # ---------------------------------------------------------------------
 grad_call_times = []
@@ -63,25 +68,6 @@ def ista(
     tol: float = 0.0,
     return_history: bool = False,
 ) -> tuple[np.ndarray, dict] | np.ndarray:
-    """
-    ISTA (Iterative Soft-Thresholding / Proximal Gradient):
-      x_{k+1} = prox_h(x_k - t ∇g(x_k), t)
-    Parameters:
-      x0           - initial iterate
-      g            - smooth part of objective
-      grad_g       - gradient of g
-      prox_h       - proximal map of non-smooth part
-      L            - Lipschitz constant of ∇g
-      backtracking - whether to perform Armijo backtracking
-      eta          - backtracking shrinkage factor
-      max_iter     - maximum number of iterations
-      tol          - tolerance on step norm for stopping
-      return_history - if True, return dict with iterate history
-    Timing:
-      Records time for each gradient evaluation in grad_call_times,
-      and time + iteration count for each backtracking line-search
-      in ls_call_times and ls_call_iters.
-    """
     x = x0.copy()
     # initial step-size
     t = 1.0 / L
@@ -104,7 +90,7 @@ def ista(
                 x_new  = prox_h(v, t_k)
                 diff   = x_new - x
                 # Armijo condition
-                if g(x_new) <= g(x) + grad.dot(diff) + np.linalg.norm(diff)**2 / (2*t_k):
+                if g(x_new) <= g(x) + C * grad.dot(diff):
                     break
                 t_k   *= eta
                 bt_steps += 1
@@ -150,20 +136,6 @@ def fista(
     restart_threshold: float  = 1.0,
     return_history: bool      = False,
 ) -> tuple[np.ndarray, dict] | np.ndarray:
-    """
-    FISTA for lasso, ridge, elastic-net:
-      1) Compute gradient ∇g(y_k) = Aᵀ(A y_k – b) + α₂ y_k
-      2) Optionally backtracking line-search on g_smooth
-      3) Proximal step: x_next = prox_l1(y_k – τ∇g, τ*α₁)
-      4) Nesterov momentum update with optional adaptive restart
-      5) Stop when any of:
-           - ∥grad∥ < tol
-           - ∥x^{k+1}-x^k∥ < tol
-           - ∥x^{k+1}-x^k∥/∥x^k-x^{k-1}∥ < tol_ratio
-    Timing:
-      - Records gradient durations in grad_call_times
-      - Records line-search durations in ls_call_times and iterations in ls_call_iters
-    """
     n      = A.shape[1]
     x_k    = np.zeros(n)
     y_k    = x_k.copy()
@@ -177,7 +149,6 @@ def fista(
     x_prev  = x_k.copy()
 
     def g_smooth(z: np.ndarray) -> float:
-        """Smooth part g(z) = ½∥Az - b∥² + (α₂/2)∥z∥²."""
         r = A @ z - b
         val = 0.5 * r.dot(r)
         if alpha2 > 0:
@@ -205,7 +176,7 @@ def fista(
                 v_tmp = y_k - t_k * grad
                 x_tmp = prox_l1(v_tmp, t_k * alpha1) if alpha1 > 0 else v_tmp
                 diff  = x_tmp - y_k
-                if g_smooth(x_tmp) <= g_smooth(y_k) + grad.dot(diff) + np.linalg.norm(diff)**2/(2*t_k):
+                if g_smooth(x_tmp) <= g_smooth(y_k) + C * grad.dot(diff):
                     break
                 t_k *= eta
                 bt_steps += 1
@@ -261,7 +232,6 @@ def fista(
 
     return (x_k, history) if return_history else x_k
 
-
 # ---------------------------------------------------------------------
 # FISTA-Δ: fixed momentum θ_k = k/(k+1+δ), same stopping options
 # ---------------------------------------------------------------------
@@ -279,17 +249,6 @@ def fista_delta(
     tol_ratio: float       = 0.0,
     return_history: bool   = False,
 ) -> tuple[np.ndarray, dict] | np.ndarray:
-    """
-    FISTA-Δ solver with fixed θ_k = k/(k+1+δ):
-      1) ∇g(y_k) = Aᵀ(A y_k – b) + 2α₂ y_k (if elastic-net)
-      2) Optional backtracking on g_smooth
-      3) Proximal x_next = prox_l1(y_k – τ∇g, τ*α₁)
-      4) Momentum y_{k+1} = x_next + θ_k (x_next – x_k)
-      5) Stop when any of:
-           - ∥x_next – x_k∥ < tol
-           - ∥x_next – x_k∥/∥x_k – x_{k-1}∥ < tol_ratio
-    Timing stats as above.
-    """
     m, n = A.shape
     x_k  = np.zeros(n)
     y_k  = x_k.copy()
@@ -307,7 +266,7 @@ def fista_delta(
         """Smooth part for FISTA-Δ."""
         r = A @ z - b
         val = 0.5 * r.dot(r)
-        if alpha2 > 0:
+        if reg_type == 'elasticnet' and alpha2 > 0:
             val += 0.5 * alpha2 * z.dot(z)
         return val
 
@@ -328,7 +287,7 @@ def fista_delta(
                 v_tmp = y_k - tau_k * grad
                 x_tmp = prox_l1(v_tmp, tau_k * alpha1) if alpha1>0 else v_tmp
                 diff  = x_tmp - y_k
-                if g_smooth(x_tmp) <= g_smooth(y_k) + grad.dot(diff) + np.linalg.norm(diff)**2/(2*tau_k):
+                if g_smooth(x_tmp) <= g_smooth(y_k) + C * grad.dot(diff):
                     break
                 tau_k *= eta
                 bt_steps += 1
