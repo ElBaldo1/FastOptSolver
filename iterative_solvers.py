@@ -64,13 +64,14 @@ def ista(
     L: float,
     backtracking: bool = False,
     eta: float = 0.5,
+    t_init_factor: float = 1.0,   # NEW
     max_iter: int = 500,
     tol: float = 0.0,
     return_history: bool = False,
 ) -> tuple[np.ndarray, dict] | np.ndarray:
     x = x0.copy()
     # initial step-size
-    t = 1.0 / L
+    t = t_init_factor / L   # UPDATED
     # prepare history log if requested
     log = {"x": [x.copy()], "t": [t], "delta": []} if return_history else None
 
@@ -129,6 +130,7 @@ def fista(
     alpha2: float,
     backtracking: bool        = False,
     eta: float                = 0.5,
+    t_init_factor: float      = 1.0,   # NEW
     max_iter: int             = 500,
     tol: float                = 0.0,
     tol_ratio: float          = 0.0,
@@ -143,7 +145,7 @@ def fista(
 
     # Lipschitz L = ∥A∥² + α₂
     L_val = np.linalg.norm(A, 2)**2 + alpha2
-    tau   = 1.0 / L_val
+    tau   = t_init_factor / L_val   # UPDATED
 
     history = {"x": [x_k.copy()], "obj": []} if return_history else None
     x_prev  = x_k.copy()
@@ -244,6 +246,7 @@ def fista_delta(
     delta: float,
     backtracking: bool     = False,
     eta: float             = 0.5,
+    t_init_factor: float   = 1.0,   # NEW
     max_iter: int          = 500,
     tol: float             = 0.0,
     tol_ratio: float       = 0.0,
@@ -257,13 +260,12 @@ def fista_delta(
     L_val = estimate_lipschitz(A)
     if reg_type == 'elasticnet' and alpha2 > 0:
         L_val += 2*alpha2
-    tau = 1.0 / L_val
+    tau = t_init_factor / L_val   # UPDATED
 
     history = {"x": [], "obj": []} if return_history else None
     x_prev = x_k.copy()
 
     def g_smooth(z: np.ndarray) -> float:
-        """Smooth part for FISTA-Δ."""
         r = A @ z - b
         val = 0.5 * r.dot(r)
         if reg_type == 'elasticnet' and alpha2 > 0:
