@@ -46,8 +46,8 @@ class LBFGSSolver:
             loss = 0.5 * r.dot(r)
             grad = A.T @ r
             if self.reg_type in ("ridge", "elasticnet"):
-                loss += self.alpha2 * x.dot(x)
-                grad += 2 * self.alpha2 * x
+                loss += 0.5 * self.alpha2 * x.dot(x)
+                grad += self.alpha2 * x
             # 2) record the gradient timing
             grad_call_times.append(time.perf_counter() - t0)
             return loss, grad

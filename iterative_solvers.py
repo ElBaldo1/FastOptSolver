@@ -2,7 +2,7 @@ from __future__ import annotations
 import time
 import numpy as np
 from objective_functions import compute_objective
-from prox_operators import prox_l1, prox_elastic_net
+from prox_operators import prox_l1
 from typing import Callable
 
 # ---------------------------------------------------------------------
@@ -11,7 +11,7 @@ from typing import Callable
 C: float = 1e-2  # sufficient decrease parameter for Armijo condition
 
 # ---------------------------------------------------------------------
-# METRICS INFRASTRUCTURE FOR ISTA TIMING
+# METRICS INFRASTRUCTURE FOR SOLVERS TIMING
 # ---------------------------------------------------------------------
 grad_call_times = []
 ls_call_times   = []
@@ -145,7 +145,7 @@ def fista(
 
     # Lipschitz L = ∥A∥² + α₂
     L_val = np.linalg.norm(A, 2)**2 + alpha2
-    tau   = t_init_factor / L_val   # UPDATED
+    tau   = t_init_factor / L_val
 
     history = {"x": [x_k.copy()], "obj": []} if return_history else None
     x_prev  = x_k.copy()
@@ -234,33 +234,36 @@ def fista(
 
     return (x_k, history) if return_history else x_k
 
+
 # ---------------------------------------------------------------------
 # FISTA-Δ: fixed momentum θ_k = k/(k+1+δ), same stopping options
 # ---------------------------------------------------------------------
 def fista_delta(
-    A: np.ndarray,
-    b: np.ndarray,
-    reg_type: str,
-    alpha1: float,
-    alpha2: float,
-    delta: float,
-    backtracking: bool     = False,
-    eta: float             = 0.5,
-    t_init_factor: float   = 1.0,   # NEW
-    max_iter: int          = 500,
-    tol: float             = 0.0,
-    tol_ratio: float       = 0.0,
-    return_history: bool   = False,
+        A: np.ndarray,
+        b: np.ndarray,
+        reg_type: str,
+        alpha1: float,
+        alpha2: float,
+        delta: float,
+        backtracking: bool = False,
+        eta: float = 0.5,
+        t_init_factor: float = 1.0,  # NEW
+        max_iter: int = 500,
+        tol: float = 0.0,
+        tol_ratio: float = 0.0,
+        return_history: bool = False,
 ) -> tuple[np.ndarray, dict] | np.ndarray:
+    # Course requirement: delta > 2 for convergence guarantee
+    assert delta > 2, "In FISTA-Δ, delta must be > 2 for convergence (course requirement)"
     m, n = A.shape
-    x_k  = np.zeros(n)
-    y_k  = x_k.copy()
+    x_k = np.zeros(n)
+    y_k = x_k.copy()
 
-    # Lipschitz estimate λ_max(AᵀA) + 2α₂
+    # Lipschitz estimate λ_max(AᵀA) + α₂
     L_val = estimate_lipschitz(A)
-    if reg_type == 'elasticnet' and alpha2 > 0:
-        L_val += 2*alpha2
-    tau = t_init_factor / L_val   # UPDATED
+    if alpha2 > 0:  # applies to ridge or elastic-net
+        L_val += alpha2
+    tau = t_init_factor / L_val
 
     history = {"x": [], "obj": []} if return_history else None
     x_prev = x_k.copy()
@@ -268,27 +271,27 @@ def fista_delta(
     def g_smooth(z: np.ndarray) -> float:
         r = A @ z - b
         val = 0.5 * r.dot(r)
-        if reg_type == 'elasticnet' and alpha2 > 0:
+        if alpha2 > 0:  # also covers ridge
             val += 0.5 * alpha2 * z.dot(z)
         return val
 
-    for k in range(1, max_iter+1):
+    for k in range(1, max_iter + 1):
         # 1) timed gradient
         t0 = time.perf_counter()
         grad = A.T @ (A @ y_k - b)
-        if reg_type == 'elasticnet' and alpha2 > 0:
-            grad += 2*alpha2 * y_k
+        if alpha2 > 0:  # applies to ridge or elastic-net
+            grad += alpha2 * y_k
         grad_call_times.append(time.perf_counter() - t0)
 
         # 2) backtracking if desired
         if backtracking:
             bt_steps = 0
-            ls_t0    = time.perf_counter()
-            tau_k    = tau
+            ls_t0 = time.perf_counter()
+            tau_k = tau
             while True:
                 v_tmp = y_k - tau_k * grad
-                x_tmp = prox_l1(v_tmp, tau_k * alpha1) if alpha1>0 else v_tmp
-                diff  = x_tmp - y_k
+                x_tmp = prox_l1(v_tmp, tau_k * alpha1) if alpha1 > 0 else v_tmp
+                diff = x_tmp - y_k
                 if g_smooth(x_tmp) <= g_smooth(y_k) + C * grad.dot(diff):
                     break
                 tau_k *= eta
@@ -298,7 +301,7 @@ def fista_delta(
             tau = tau_k
 
         # 3) proximal update
-        v      = y_k - tau * grad
+        v = y_k - tau * grad
         x_next = prox_l1(v, tau * alpha1) if alpha1 > 0 else v
 
         # 4) record history
@@ -309,12 +312,12 @@ def fista_delta(
 
         # 5) compute step & ratio
         this_step = np.linalg.norm(x_next - x_k)
-        prev_step = np.linalg.norm(x_k     - x_prev)
-        ratio     = this_step / prev_step if prev_step > 0 else np.inf
+        prev_step = np.linalg.norm(x_k - x_prev)
+        ratio = this_step / prev_step if prev_step > 0 else np.inf
 
         # 6) momentum update θ_k = k/(k+1+δ)
         theta = k / (k + 1 + delta)
-        y_k   = x_next + theta * (x_next - x_k)
+        y_k = x_next + theta * (x_next - x_k)
 
         # 7) prepare next
         x_prev, x_k = x_k, x_next
