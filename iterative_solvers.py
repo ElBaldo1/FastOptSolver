@@ -17,9 +17,15 @@ grad_call_times = []
 ls_call_times   = []
 ls_call_iters   = []
 
+def reset_metrics() -> None:
+    """Clear all recorded solver metrics."""
+    grad_call_times.clear()
+    ls_call_times.clear()
+    ls_call_iters.clear()
+
 def get_metrics():
     """
-    Return timing statistics for ISTA:
+    Return timing statistics collected during the last solver run:
       - total/mean gradient evaluation time
       - total/mean line-search time and total line-search iterations
     """
@@ -69,6 +75,7 @@ def ista(
     tol: float = 0.0,
     return_history: bool = False,
 ) -> tuple[np.ndarray, dict] | np.ndarray:
+    reset_metrics()
     x = x0.copy()
     # initial step-size
     t = t_init_factor / L   # UPDATED
@@ -138,6 +145,7 @@ def fista(
     restart_threshold: float  = 1.0,
     return_history: bool      = False,
 ) -> tuple[np.ndarray, dict] | np.ndarray:
+    reset_metrics()
     n      = A.shape[1]
     x_k    = np.zeros(n)
     y_k    = x_k.copy()
@@ -253,6 +261,7 @@ def fista_delta(
         tol_ratio: float = 0.0,
         return_history: bool = False,
 ) -> tuple[np.ndarray, dict] | np.ndarray:
+    reset_metrics()
     # Course requirement: delta > 2 for convergence guarantee
     assert delta > 2, "In FISTA-Δ, delta must be > 2 for convergence (course requirement)"
     m, n = A.shape
