@@ -152,7 +152,9 @@ def fista(
     t_prev = 1.0
 
     # Lipschitz L = ∥A∥² + α₂
-    L_val = np.linalg.norm(A, 2)**2 + alpha2
+    L_val = estimate_lipschitz(A)  # estimates λ_max(AᵀA)
+    if alpha2 > 0:
+        L_val += alpha2
     tau   = t_init_factor / L_val
 
     history = {"x": [x_k.copy()], "obj": []} if return_history else None
